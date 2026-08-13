@@ -1,0 +1,17 @@
+# Cache de bytecode do Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Ambientes virtuais, caso o grupo use algum
+venv/
+.venv/
+env/
+
+# Arquivos de IDE/editor
+.vscode/
+.idea/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db

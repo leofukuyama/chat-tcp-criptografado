@@ -61,14 +61,17 @@ def _montar_matriz(chave: str) -> list[str]:
     aparecem) seguidas do restante do alfabeto de 25 letras.
     Retorna uma lista de 5 strings, cada uma representando uma linha.
 
+    Com a chave "PLAYFAIR EXAMPLE", a matriz fica assim (I e J dividem
+    a mesma célula):
+
+        P   L A Y F
+        I/J R E X M
+        B   C D G H
+        K   N O Q S
+        T   U V W Z
+
     >>> _montar_matriz("PLAYFAIR EXAMPLE")
-    [
-    'P   L A Y F', 
-    'I/J R E X M', 
-    'B   C D G H', 
-    'K   N O Q S', 
-    'T   U V W Z'
-    ]
+    ['PLAYF', 'IREXM', 'BCDGH', 'KNOQS', 'TUVWZ']
     """
     letras_chave = _extrair_letras(_normalizar(chave))
 

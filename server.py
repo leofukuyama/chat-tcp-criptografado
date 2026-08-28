@@ -23,10 +23,9 @@ server.listen()
 # Cada cliente conectado gera sua própria thread (handle()), então essas
 # estruturas são acessadas concorrentemente e precisam de proteção (lock).
 
-clients = []       # lista de sockets dos clientes conectados
-nicknames = []      # lista paralela de apelidos (mesmo índice de clients)
-lock = threading.Lock()  # protege clients/nicknames contra race conditions
-running = True      # flag global: controla o encerramento ordenado do servidor
+clients = []        # lista de sockets dos clientes conectados
+lock = threading.Lock()  # protege clients contra race conditions
+running = True       # flag global: controla o encerramento ordenado do servidor
 
 CONTROLE_SAIR = "/sair"      # comando de controle: texto puro, nunca cifrado
 PREFIXO_SISTEMA = "SYS:"     # marca mensagens geradas pelo servidor (não cifradas),
@@ -62,36 +61,32 @@ def broadcast_raw(dado_bytes, remetente=None):
 
 def remover_cliente(client, avisar=True, motivo="saiu do chat"):
     """
-    Remove um cliente das listas compartilhadas e notifica o restante da sala.
+    Remove um cliente da lista compartilhada e notifica o restante da sala.
 
-    O parâmetro `motivo` tem DOIS destinos diferentes e propositalmente
-    separados:
-      - vai para o print() do console do servidor (log técnico, detalhado,
-        só visível para quem está operando o servidor);
-      - NÃO vai para a mensagem pública enviada aos outros clientes, que é
-        sempre um texto fixo e genérico. O usuário do chat não precisa saber
-        SE a saída foi por /sair, erro de rede, ou outro motivo técnico --
-        só que a pessoa saiu.
+    Sem nickname, não há mais nome para identificar o cliente publicamente
+    -- a mensagem enviada aos outros participantes é sempre genérica.
+    Para o log interno do servidor (só visível para quem está operando o
+    servidor), usamos o endereço da conexão (ip:porta) como identificador,
+    já que ele ainda está disponível no socket antes de fechá-lo.
     """
+    endereco = None
     with lock:
         if client in clients:
-            index = clients.index(client)
+            try:
+                endereco = client.getpeername()
+            except OSError:
+                endereco = None
             clients.remove(client)
-            nickname = nicknames.pop(index)
-        else:
-            nickname = None
 
-    if nickname:
+    if endereco is not None:
         # Log interno do servidor: pode ser técnico/detalhado.
-        print(f"[DESCONECTADO] {nickname} — {motivo}")
+        print(f"[DESCONECTADO] {endereco} — {motivo}")
 
         if avisar:
             # Mensagem pública, SEMPRE com o mesmo texto fixo,
             # independentemente do motivo técnico da saída.
-            aviso = f"{PREFIXO_SISTEMA}{nickname} saiu do chat ;-;"
+            aviso = f"{PREFIXO_SISTEMA}Um participante saiu do chat ;-;"
             broadcast_raw(aviso.encode("utf-8"))
-
-    return nickname
 
 
 def encerrar_tudo():
@@ -191,9 +186,12 @@ def handle(client):
 
 def receive():
     """
-    Fica em loop aceitando novas conexões. Para cada cliente novo, faz o
-    handshake de identidade (NICK) e sobe uma thread dedicada (handle())
+    Fica em loop aceitando novas conexões. Para cada cliente novo, adiciona
+    o socket à lista compartilhada e sobe uma thread dedicada (handle())
     para cuidar daquele cliente específico dali em diante.
+
+    Não há mais handshake de identidade (NICK): o servidor não precisa de
+    um nome para gerenciar o cliente, o próprio objeto socket já basta.
     """
     while running:
         try:
@@ -205,21 +203,12 @@ def receive():
 
         print(f"Conectado com {address}")
 
-        # Handshake de identidade: pede o apelido ao cliente.
-        # Não tem relação nenhuma com a escolha de cifra -- isso é
-        # decidido localmente pelo próprio cliente, sem envolver o servidor.
-        client.send("NICK".encode("utf-8"))
-        nickname = client.recv(1024).decode("utf-8")
-
         with lock:
-            nicknames.append(nickname)
             clients.append(client)
-
-        print(f"Apelido do cliente é {nickname}")
 
         # Notifica os demais clientes (texto puro, marcado com o prefixo
         # de sistema, para eles saberem que não devem tentar decifrar isso).
-        aviso = f"{PREFIXO_SISTEMA}{nickname} entrou no chat :D"
+        aviso = f"{PREFIXO_SISTEMA}Um novo participante entrou no chat :D"
         broadcast_raw(aviso.encode("utf-8"), remetente=client)
 
         thread = threading.Thread(target=handle, args=(client,), daemon=True)

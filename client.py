@@ -6,10 +6,8 @@ import signal
 from cifras.registro import CIFRAS, NOMES
 
 # ============================================================
-# IDENTIFICAÇÃO E CONEXÃO
+# CONEXÃO
 # ============================================================
-
-nickname = input("Digite seu apelido: ")
 
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 client.connect(("127.0.0.1", 64146))
@@ -91,12 +89,11 @@ def receive(modulo, chave):
     cada um, na seguinte ordem de prioridade:
       1. Conexão caiu (dado vazio)?
       2. É um comando de controle (/sair global)?
-      3. É o handshake de identidade (NICK)?
-      4. É uma mensagem de sistema (entrada/saída de alguém)?
-      5. Só então: é conteúdo de chat de verdade -> tenta decifrar.
-    Essa ordem importa: pular a checagem 4 e tentar decifrar tudo faria
+      3. É uma mensagem de sistema (entrada/saída de alguém)?
+      4. Só então: é conteúdo de chat de verdade -> tenta decifrar.
+    Essa ordem importa: pular a checagem 3 e tentar decifrar tudo faria
     o programa tentar decifrar textos que nunca foram cifrados (como
-    "fulano entrou no chat"), gerando lixo.
+    "alguém entrou no chat"), gerando lixo.
     """
     global running
     while running:
@@ -126,18 +123,13 @@ def receive(modulo, chave):
                 encerrar_por_desconexao()
                 break
 
-            # --- 3. Handshake de identidade ---
-            if dado == "NICK":
-                client.send(nickname.encode("utf-8"))
-                continue
-
-            # --- 4. Mensagem de sistema (nunca foi cifrada) ---
+            # --- 3. Mensagem de sistema (nunca foi cifrada) ---
             if dado.startswith(PREFIXO_SISTEMA):
                 texto_sistema = dado[len(PREFIXO_SISTEMA):]
                 print(f"\r*** {texto_sistema} ***\n > ", end="", flush=True)
                 continue
 
-            # --- 5. Conteúdo de chat real: só aqui decifra de fato ---
+            # --- 4. Conteúdo de chat real: só aqui decifra de fato ---
             texto_claro = modulo.decifrar(dado, chave)
             print(f"\r[CIFRADO]   {dado}")
             print(f"[DECIFRADO] {texto_claro}\n > ", end="", flush=True)
@@ -181,8 +173,8 @@ def write(modulo, chave):
             break
 
         # Mensagem de chat real: cifrada antes de sair pela rede.
-        texto_claro = f"{nickname}: {msg}"
-        cifrado = modulo.cifrar(texto_claro, chave)
+        # (sem prefixo de nome -- não há mais identificação de usuário)
+        cifrado = modulo.cifrar(msg, chave)
         try:
             client.send(cifrado.encode("utf-8"))
         except OSError:
@@ -195,13 +187,10 @@ def write(modulo, chave):
 # PONTO DE ENTRADA
 # ============================================================
 
-# --- Handshake inicial: só troca identidade (NICK). ---
 # A escolha de cifra é inteiramente local e não depende de nada vindo
-# do servidor (ver escolher_cifra() acima).
-primeira_msg = client.recv(1024).decode("utf-8")
-if primeira_msg == "NICK":
-    client.send(nickname.encode("utf-8"))
-
+# do servidor (ver escolher_cifra() acima). Não há mais handshake de
+# identidade -- a conexão TCP já é suficiente para o servidor saber
+# quem é quem internamente (via socket).
 modulo, chave = escolher_cifra()
 
 # receive() roda em background (daemon=True): se a thread principal

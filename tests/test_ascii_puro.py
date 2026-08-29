@@ -288,6 +288,81 @@ def teste_todo_byte_alto_e_rejeitado_na_decodificacao():
 
 
 # ============================================================
+# Contrato transversal: NENHUMA cifra pode produzir saída não-ASCII
+# ============================================================
+# ascii_puro garante o transporte, mas a garantia só vale de ponta a ponta
+# se as cifras também respeitarem o alfabeto. Já houve um caso real: a
+# monoalfabética aceitava chave acentuada na validação e a usava crua na
+# cifragem, mapeando uma letra para 'Ñ'. Este bloco vigia todas as cifras
+# de uma vez, para o mesmo erro não reaparecer em outra.
+
+from cifras.registro import CIFRAS, NOMES
+
+# Uma chave válida por cifra, incluindo variantes acentuadas de propósito.
+CHAVES_POR_OPCAO = {
+    "1": ["", "ignorada"],
+    "2": ["0", "3", "25"],
+    "3": ["QWERTYUIOPASDFGHJKLZXCVBNM", "QWERTYUIOPASDFGHJKLZXCVBÑM"],
+    "4": ["SEGURANCA", "SEGURANÇA", "chave com espaço"],
+    "5": ["CHAVE", "CHÁVE", "cháve"],
+}
+
+TEXTOS = [
+    "Ataque ao amanhecer",
+    "Ola, ação do José!",
+    "Encontro as 14:30 -- confirmar!",
+    "YAYA COM ESTILO",
+    "",
+]
+
+
+def teste_toda_cifra_com_chave_valida_produz_saida_ascii():
+    for opcao, chaves in CHAVES_POR_OPCAO.items():
+        modulo = CIFRAS[opcao]
+        for chave in chaves:
+            valido, erro = modulo.validar_chave(chave)
+            if not valido:
+                continue  # chave recusada nunca chega a cifrar(); tudo bem
+            for texto in TEXTOS:
+                cifrado = modulo.cifrar(ascii_puro.preparar(texto), chave)
+                assert cifrado.isascii(), (
+                    f"{NOMES[opcao]} com chave {chave!r} produziu saida "
+                    f"nao-ASCII para {texto!r}: "
+                    f"{ascii_puro.descrever_invalidos(cifrado)}"
+                )
+
+
+def teste_toda_cifra_com_chave_valida_faz_ida_e_volta():
+    """Uma cifra pode ser ASCII e mesmo assim estar corrompendo. Este teste
+    fecha essa brecha: o que entra tem de voltar.
+
+    A Playfair fica de fora: ela é lossy POR DEFINIÇÃO, não por defeito --
+    funde J em I e insere X de preenchimento entre letras duplicadas e no
+    fim de mensagem ímpar. 'Ola, acao do Jose!' volta como
+    'OLAX, ACAO DO IOSE!'. Essas perdas já têm testes próprios em
+    tests/test_playfair.py (teste_perda_conhecida_j_vira_i e os diag_*), e
+    afrouxar a asserção aqui para acomodá-las cegaria o teste para as
+    outras quatro cifras. A garantia de ASCII da Playfair continua coberta
+    pelo teste acima.
+    """
+    for opcao, chaves in CHAVES_POR_OPCAO.items():
+        if CIFRAS[opcao] is CIFRAS["4"]:
+            continue
+        modulo = CIFRAS[opcao]
+        for chave in chaves:
+            valido, _ = modulo.validar_chave(chave)
+            if not valido:
+                continue
+            for texto in TEXTOS:
+                preparado = ascii_puro.preparar(texto)
+                voltou = modulo.decifrar(modulo.cifrar(preparado, chave), chave)
+                assert voltou.upper() == preparado.upper(), (
+                    f"{NOMES[opcao]} com chave {chave!r}: "
+                    f"{preparado!r} voltou como {voltou!r}"
+                )
+
+
+# ============================================================
 # RUNNER
 # ============================================================
 
@@ -320,6 +395,8 @@ TESTES = [
     teste_decodificar_aceita_bytes_vazios,
     teste_ida_e_volta_para_todos_os_128_caracteres_ascii,
     teste_todo_byte_alto_e_rejeitado_na_decodificacao,
+    teste_toda_cifra_com_chave_valida_produz_saida_ascii,
+    teste_toda_cifra_com_chave_valida_faz_ida_e_volta,
 ]
 
 

@@ -42,7 +42,12 @@ def _normalizar(texto: str) -> str:
 
 
 def cifrar(texto: str, chave: str) -> str:
-    chave = chave.upper()
+    # A chave passa pela MESMA normalização de validar_chave(). Sem isso, uma
+    # chave acentuada seria aprovada na validação (que normaliza) e usada
+    # crua aqui, mapeando alguma letra para um caractere não-ASCII e gerando
+    # uma cifra impossível de transmitir. Vigenère e Playfair já normalizam
+    # a chave internamente pelo mesmo motivo.
+    chave = _normalizar(chave)
     texto_normalizado = _normalizar(texto)
 
     tabela = str.maketrans(ALFABETO, chave)
@@ -54,10 +59,11 @@ def decifrar(texto: str, chave: str) -> str:
     Reaproveita a mesma técnica de tradução, com o mapa invertido
     (chave -> alfabeto em vez de alfabeto -> chave).
 
-    Não normaliza aqui: o texto recebido já é o texto CIFRADO, já
-    normalizado quando foi cifrado do outro lado.
+    Não normaliza o TEXTO aqui: ele já é o texto CIFRADO, já normalizado
+    quando foi cifrado do outro lado. A CHAVE, sim, é normalizada -- tem de
+    ser exatamente a mesma transformação aplicada em cifrar().
     """
-    chave = chave.upper()
+    chave = _normalizar(chave)
 
     tabela = str.maketrans(chave, ALFABETO)
     return texto.translate(tabela)

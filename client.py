@@ -5,6 +5,7 @@ import os
 import signal
 
 import ascii_puro
+import protocolo
 from cifras.registro import CIFRAS, NOMES
 
 # ============================================================
@@ -24,8 +25,7 @@ client.connect(("127.0.0.1", 64146))
 
 running = True            # controla o loop principal de envio/recebimento
 saida_voluntaria = False  # diferencia "eu decidi sair" de "o servidor caiu"
-CONTROLE_SAIR = "/sair"   # comando de controle: texto puro, nunca cifrado
-PREFIXO_SISTEMA = "SYS:"  # marca mensagens de sistema (nunca cifradas)
+COMANDO_SAIR = "/sair"
 
 
 # ============================================================
@@ -86,28 +86,66 @@ def encerrar_por_desconexao():
 
 
 # ============================================================
+# EXIBIÇÃO DE UM QUADRO RECEBIDO
+# ============================================================
+
+def mostrar_quadro(quadro, modulo, chave):
+    """
+    Decide o que fazer com um quadro completo vindo do servidor.
+    Devolve False quando o cliente deve encerrar.
+
+    A decisão é tomada pelo TIPO declarado no cabeçalho, não por inspeção do
+    conteúdo. Antes o código perguntava `if dado == "/sair"` e
+    `if dado.startswith("SYS:")`, o que confundia mensagem de chat com aviso
+    do servidor e permitia falsificação.
+    """
+    # Payload não-ASCII: o servidor já barra, mas o cliente não confia nisso
+    # -- verificar dos dois lados é o que torna a garantia independente de
+    # quem está do outro lado da conexão.
+    if quadro.texto is None:
+        print(f"\r*** mensagem descartada: {quadro.erro} ***\n > ", end="", flush=True)
+        return True
+
+    if quadro.tipo == protocolo.TIPO_CONTROLE:
+        if quadro.texto == COMANDO_SAIR:
+            print("\rServidor encerrado pelo administrador.")
+            encerrar_por_desconexao()
+            return False
+        return True
+
+    if quadro.tipo == protocolo.TIPO_SISTEMA:
+        # Nunca foi cifrado: tentar decifrar isso geraria lixo.
+        print(f"\r*** {quadro.texto} ***\n > ", end="", flush=True)
+        return True
+
+    # Conteúdo de chat real: só aqui decifra de fato.
+    texto_claro = modulo.decifrar(quadro.texto, chave)
+    print(f"\r[CIFRADO]   {quadro.texto}")
+    print(f"[DECIFRADO] {texto_claro}\n > ", end="", flush=True)
+    return True
+
+
+# ============================================================
 # THREAD DE RECEBIMENTO (roda em background)
 # ============================================================
 
 def receive(modulo, chave):
     """
-    Fica em loop recebendo dados do servidor e decidindo o que fazer com
-    cada um, na seguinte ordem de prioridade:
-      1. Conexão caiu (dado vazio)?
-      2. Os bytes são ASCII? (senão, descarta o frame)
-      3. É um comando de controle (/sair global)?
-      4. É uma mensagem de sistema (entrada/saída de alguém)?
-      5. Só então: é conteúdo de chat de verdade -> tenta decifrar.
-    Essa ordem importa: pular a checagem 4 e tentar decifrar tudo faria
-    o programa tentar decifrar textos que nunca foram cifrados (como
-    "alguem entrou no chat"), gerando lixo.
+    Fica em loop recebendo dados do servidor, remontando quadros completos e
+    despachando cada um para mostrar_quadro().
+
+    O desempacotador é o que corrige o defeito de enquadramento: duas
+    mensagens que chegam grudadas em um recv() saem daqui como dois quadros
+    separados, e uma mensagem picada entre dois recv() é remontada.
     """
     global running
+    desempacotador = protocolo.Desempacotador()
+
     while running:
         try:
             dado = client.recv(1024)
 
-            # --- 1. Conexão encerrada (recv retornou vazio) ---
+            # --- Conexão encerrada (recv retornou vazio) ---
             if not dado:
                 if saida_voluntaria:
                     # Fomos NÓS que fechamos o socket (via /sair ou Ctrl+C).
@@ -124,34 +162,19 @@ def receive(modulo, chave):
                 running = False
                 break
 
-            # --- 2. CAMADA 3 da defesa ASCII, lado do receptor ---
-            # O servidor já barra frames não-ASCII, mas o cliente não
-            # confia nisso: verificar dos dois lados é o que torna a
-            # garantia independente de quem está do outro lado da conexão.
-            # Frame inválido é descartado e a sessão continua -- uma
-            # mensagem malformada não é motivo para derrubar o chat.
             try:
-                dado = ascii_puro.decodificar(dado)
-            except ascii_puro.ErroAscii as erro:
-                print(f"\r*** mensagem descartada: {erro} ***\n > ", end="", flush=True)
-                continue
-
-            # --- 3. Comando de controle: encerramento GLOBAL do servidor ---
-            if dado == CONTROLE_SAIR:
-                print("\rServidor encerrado pelo administrador.")
+                quadros = desempacotador.alimentar(dado)
+            except protocolo.ErroProtocolo as erro:
+                # Cabeçalho corrompido: não dá para saber onde este quadro
+                # termina, então não dá para pular só ele. Seguir seria
+                # interpretar lixo.
+                print(f"\rConexão encerrada — protocolo inválido: {erro}")
                 encerrar_por_desconexao()
                 break
 
-            # --- 4. Mensagem de sistema (nunca foi cifrada) ---
-            if dado.startswith(PREFIXO_SISTEMA):
-                texto_sistema = dado[len(PREFIXO_SISTEMA):]
-                print(f"\r*** {texto_sistema} ***\n > ", end="", flush=True)
-                continue
-
-            # --- 5. Conteúdo de chat real: só aqui decifra de fato ---
-            texto_claro = modulo.decifrar(dado, chave)
-            print(f"\r[CIFRADO]   {dado}")
-            print(f"[DECIFRADO] {texto_claro}\n > ", end="", flush=True)
+            for quadro in quadros:
+                if not mostrar_quadro(quadro, modulo, chave):
+                    return
 
         except OSError:
             # Socket já fechado localmente (Ctrl+C tratado no bloco principal).
@@ -167,6 +190,15 @@ def receive(modulo, chave):
 # LOOP DE ENVIO (roda na thread PRINCIPAL)
 # ============================================================
 
+def enviar(tipo, texto):
+    """Empacota e manda. Devolve False se a conexão caiu."""
+    try:
+        client.send(protocolo.empacotar(tipo, texto))
+        return True
+    except OSError:
+        return False
+
+
 def write(modulo, chave):
     """
     Fica em loop lendo o que o usuário digita, cifrando e enviando.
@@ -180,14 +212,10 @@ def write(modulo, chave):
         if not running:
             break
 
-        if msg.strip() == CONTROLE_SAIR:
+        if msg.strip() == COMANDO_SAIR:
             # Saída voluntária e individual: só esse cliente sai.
             saida_voluntaria = True
-            try:
-                # Comando de controle: enviado em texto puro, nunca cifrado.
-                client.send(ascii_puro.codificar(CONTROLE_SAIR))
-            except OSError:
-                pass
+            enviar(protocolo.TIPO_CONTROLE, COMANDO_SAIR)
             running = False
             break
 
@@ -203,17 +231,22 @@ def write(modulo, chave):
             print(f"   Mensagem não enviada — só é permitido ASCII. Removido: {erro}")
             continue
 
-        # Mensagem de chat real: cifrada antes de sair pela rede.
         cifrado = modulo.cifrar(texto_claro, chave)
+
+        # empacotar() aplica a CAMADA 2 (errors="strict") e valida o
+        # tamanho. Mesmo que a camada 1 falhasse, é impossível um byte
+        # >= 0x80 sair deste processo.
         try:
-            # --- CAMADA 2 ---
-            # errors="strict": mesmo que a camada 1 tivesse deixado passar
-            # algo, ou que uma cifra produzisse um caractere inesperado, é
-            # impossível um byte >= 0x80 sair deste processo.
-            client.send(ascii_puro.codificar(cifrado))
+            quadro = protocolo.empacotar(protocolo.TIPO_MENSAGEM, cifrado)
         except ascii_puro.ErroAscii as erro:
             print(f"   Envio bloqueado pela verificação final de ASCII: {erro}")
             continue
+        except protocolo.ErroProtocolo as erro:
+            print(f"   Mensagem não enviada — {erro}")
+            continue
+
+        try:
+            client.send(quadro)
         except OSError:
             print("\rNão foi possível enviar: conexão perdida.")
             running = False
@@ -241,10 +274,7 @@ try:
 except KeyboardInterrupt:
     print("\nEncerrando cliente...")
     saida_voluntaria = True
-    try:
-        client.send(ascii_puro.codificar(CONTROLE_SAIR))
-    except OSError:
-        pass
+    enviar(protocolo.TIPO_CONTROLE, COMANDO_SAIR)
 finally:
     # Cleanup final, executado em QUALQUER caminho de saída
     # (comando /sair, Ctrl+C, ou erro de rede).

@@ -229,6 +229,52 @@ camada acima. As mensagens de diagnóstico passam a identificar os caracteres
 por código (`U+03A9`) em vez de imprimi-los literalmente, tornando as suítes
 executáveis sem depender de `PYTHONIOENCODING`.
 
+## Adendo (2026-08-29): enquadramento de mensagens
+
+Ao verificar as cinco cifras de ponta a ponta, apareceu um defeito **anterior
+a este trabalho** e não relacionado a charset: duas mensagens enviadas em
+sequência rápida chegam grudadas em um único `recv()` e eram decifradas como
+se fossem uma só. Reproduzido no commit `2aa30ab`, antes de qualquer mudança:
+
+```
+[CIFRADO]   ROD PXQGR/sairSYS:alice saiu do chat ;-;
+[DECIFRADO] OLA MUNDO/PXFOPVP:XIFZB PXFR AL ZEXQ ;-;
+```
+
+A causa é TCP ser um fluxo de bytes, não de mensagens: o código tratava cada
+`recv()` como se fosse exatamente um `send()`. Isso falha nos dois sentidos —
+mensagens grudam, e uma mensagem maior que o buffer chega picada.
+
+O módulo `protocolo.py` resolve isso com um quadro de cabeçalho fixo:
+
+```
+M 0011 HELLO WORLD
+│  │    └── payload
+│  └── tamanho do payload, 4 dígitos decimais ASCII (máx 9999)
+└── tipo: M=mensagem  S=sistema  C=controle
+```
+
+O tamanho vai em **dígitos decimais**, não em bytes binários, porque o
+cabeçalho também trafega: um tamanho binário colocaria bytes ≥ 0x80 na rede e
+quebraria o requisito de ASCII. Assim o quadro inteiro continua verificável
+byte a byte.
+
+O **tipo no cabeçalho** substitui a inspeção de conteúdo (`if dado == "/sair"`,
+`if dado.startswith("SYS:")`) e elimina o spoofing de mensagem de sistema
+mencionado na análise inicial: só o servidor emite quadros `S`, e um `S` vindo
+de cliente é recusado. Deixa de ser uma checagem e passa a ser uma propriedade
+da construção.
+
+Distinção de erros, deliberada:
+
+| Falha | Consequência | Por quê |
+| ----- | ------------ | ------- |
+| Payload não-ASCII | quadro descartado, conexão segue | o tamanho é conhecido, o próximo quadro continua alinhado |
+| Cabeçalho corrompido | conexão encerrada | sem tamanho confiável não há como saber onde o quadro termina, nem como ressincronizar |
+
+Isto é uma **mudança de protocolo**: clientes antigos são incompatíveis e
+recebem um erro claro em vez de interpretar lixo.
+
 ## Critérios de aceitação
 
 1. Nenhum byte ≥ 0x80 atravessa o socket, em nenhum caminho, nem com cliente adulterado.

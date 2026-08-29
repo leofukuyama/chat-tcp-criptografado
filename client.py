@@ -3,13 +3,17 @@ import threading
 import sys
 import os
 import signal
+
+import ascii_puro
 from cifras.registro import CIFRAS, NOMES
 
 # ============================================================
-# IDENTIFICAÇÃO E CONEXÃO
+# CONEXÃO
 # ============================================================
-
-nickname = input("Digite seu apelido: ")
+# O chat é anônimo: não há apelido nem handshake de identidade. Antes o
+# apelido era pedido aqui e enviado ao servidor em texto puro, sem passar
+# por cifra nenhuma e sem validação de charset -- era o caminho mais fácil
+# para bytes não-ASCII entrarem na rede.
 
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 client.connect(("127.0.0.1", 64146))
@@ -90,18 +94,18 @@ def receive(modulo, chave):
     Fica em loop recebendo dados do servidor e decidindo o que fazer com
     cada um, na seguinte ordem de prioridade:
       1. Conexão caiu (dado vazio)?
-      2. É um comando de controle (/sair global)?
-      3. É o handshake de identidade (NICK)?
+      2. Os bytes são ASCII? (senão, descarta o frame)
+      3. É um comando de controle (/sair global)?
       4. É uma mensagem de sistema (entrada/saída de alguém)?
       5. Só então: é conteúdo de chat de verdade -> tenta decifrar.
     Essa ordem importa: pular a checagem 4 e tentar decifrar tudo faria
     o programa tentar decifrar textos que nunca foram cifrados (como
-    "fulano entrou no chat"), gerando lixo.
+    "alguem entrou no chat"), gerando lixo.
     """
     global running
     while running:
         try:
-            dado = client.recv(1024).decode("utf-8")
+            dado = client.recv(1024)
 
             # --- 1. Conexão encerrada (recv retornou vazio) ---
             if not dado:
@@ -120,16 +124,23 @@ def receive(modulo, chave):
                 running = False
                 break
 
-            # --- 2. Comando de controle: encerramento GLOBAL do servidor ---
+            # --- 2. CAMADA 3 da defesa ASCII, lado do receptor ---
+            # O servidor já barra frames não-ASCII, mas o cliente não
+            # confia nisso: verificar dos dois lados é o que torna a
+            # garantia independente de quem está do outro lado da conexão.
+            # Frame inválido é descartado e a sessão continua -- uma
+            # mensagem malformada não é motivo para derrubar o chat.
+            try:
+                dado = ascii_puro.decodificar(dado)
+            except ascii_puro.ErroAscii as erro:
+                print(f"\r*** mensagem descartada: {erro} ***\n > ", end="", flush=True)
+                continue
+
+            # --- 3. Comando de controle: encerramento GLOBAL do servidor ---
             if dado == CONTROLE_SAIR:
                 print("\rServidor encerrado pelo administrador.")
                 encerrar_por_desconexao()
                 break
-
-            # --- 3. Handshake de identidade ---
-            if dado == "NICK":
-                client.send(nickname.encode("utf-8"))
-                continue
 
             # --- 4. Mensagem de sistema (nunca foi cifrada) ---
             if dado.startswith(PREFIXO_SISTEMA):
@@ -174,17 +185,35 @@ def write(modulo, chave):
             saida_voluntaria = True
             try:
                 # Comando de controle: enviado em texto puro, nunca cifrado.
-                client.send(CONTROLE_SAIR.encode("utf-8"))
+                client.send(ascii_puro.codificar(CONTROLE_SAIR))
             except OSError:
                 pass
             running = False
             break
 
+        # --- CAMADA 1 da defesa ASCII: entrada do usuário ---
+        # Acento é normalizado ("ação" -> "acao"), como a seção 5 do
+        # enunciado exige. O que não tem letra base ASCII (emoji, "€",
+        # cirílico) é recusado AQUI, antes de cifrar: a mensagem não sai, o
+        # usuário fica sabendo exatamente qual caractere causou o problema,
+        # e o chat continua rodando normalmente.
+        try:
+            texto_claro = ascii_puro.preparar(msg)
+        except ascii_puro.ErroAscii as erro:
+            print(f"   Mensagem não enviada — só é permitido ASCII. Removido: {erro}")
+            continue
+
         # Mensagem de chat real: cifrada antes de sair pela rede.
-        texto_claro = f"{nickname}: {msg}"
         cifrado = modulo.cifrar(texto_claro, chave)
         try:
-            client.send(cifrado.encode("utf-8"))
+            # --- CAMADA 2 ---
+            # errors="strict": mesmo que a camada 1 tivesse deixado passar
+            # algo, ou que uma cifra produzisse um caractere inesperado, é
+            # impossível um byte >= 0x80 sair deste processo.
+            client.send(ascii_puro.codificar(cifrado))
+        except ascii_puro.ErroAscii as erro:
+            print(f"   Envio bloqueado pela verificação final de ASCII: {erro}")
+            continue
         except OSError:
             print("\rNão foi possível enviar: conexão perdida.")
             running = False
@@ -195,13 +224,9 @@ def write(modulo, chave):
 # PONTO DE ENTRADA
 # ============================================================
 
-# --- Handshake inicial: só troca identidade (NICK). ---
-# A escolha de cifra é inteiramente local e não depende de nada vindo
-# do servidor (ver escolher_cifra() acima).
-primeira_msg = client.recv(1024).decode("utf-8")
-if primeira_msg == "NICK":
-    client.send(nickname.encode("utf-8"))
-
+# A escolha de cifra é inteiramente local e não depende de nada vindo do
+# servidor (ver escolher_cifra() acima). Não há handshake antes dela.
+print("Chat em modo ASCII: acentos são convertidos, o resto não é aceito.")
 modulo, chave = escolher_cifra()
 
 # receive() roda em background (daemon=True): se a thread principal
@@ -217,7 +242,7 @@ except KeyboardInterrupt:
     print("\nEncerrando cliente...")
     saida_voluntaria = True
     try:
-        client.send(CONTROLE_SAIR.encode("utf-8"))
+        client.send(ascii_puro.codificar(CONTROLE_SAIR))
     except OSError:
         pass
 finally:

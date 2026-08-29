@@ -2,6 +2,8 @@ import threading
 import socket
 import sys
 
+import ascii_puro
+
 # ============================================================
 # CONFIGURAÇÃO E INICIALIZAÇÃO DO SOCKET DO SERVIDOR
 # ============================================================
@@ -24,13 +26,26 @@ server.listen()
 # estruturas são acessadas concorrentemente e precisam de proteção (lock).
 
 clients = []       # lista de sockets dos clientes conectados
-nicknames = []      # lista paralela de apelidos (mesmo índice de clients)
-lock = threading.Lock()  # protege clients/nicknames contra race conditions
+enderecos = []     # lista paralela de endereços (mesmo índice de clients)
+lock = threading.Lock()  # protege clients/enderecos contra race conditions
 running = True      # flag global: controla o encerramento ordenado do servidor
 
 CONTROLE_SAIR = "/sair"      # comando de controle: texto puro, nunca cifrado
 PREFIXO_SISTEMA = "SYS:"     # marca mensagens geradas pelo servidor (não cifradas),
                               # para o cliente saber que NÃO deve tentar decifrar
+
+# O chat é anônimo: não existe apelido em lugar nenhum do protocolo. As
+# mensagens de entrada e saída são genéricas de propósito. O endereço de
+# quem conectou fica SÓ no log do console do servidor, nunca é transmitido
+# aos outros clientes.
+AVISO_ENTRADA = "Alguem entrou no chat :D"
+AVISO_SAIDA = "Alguem saiu do chat ;-;"
+
+
+def formatar_endereco(address) -> str:
+    """address vem do accept() como tupla (ip, porta)."""
+    ip, porta = address
+    return f"{ip}:{porta}"
 
 
 # ============================================================
@@ -56,6 +71,18 @@ def broadcast_raw(dado_bytes, remetente=None):
             pass
 
 
+def broadcast_texto(texto, remetente=None):
+    """
+    CAMADA 2 da defesa ASCII: todo texto gerado pelo próprio servidor sai
+    por aqui, e ascii_puro.codificar() usa errors="strict".
+
+    Se algum dia alguém escrever um aviso com acento ("Alguém entrou"), isso
+    estoura em vez de vazar bytes não-ASCII na rede -- o erro aparece no
+    console do servidor, onde dá para corrigir.
+    """
+    broadcast_raw(ascii_puro.codificar(texto), remetente=remetente)
+
+
 # ============================================================
 # GERENCIAMENTO DE DESCONEXÃO
 # ============================================================
@@ -71,27 +98,26 @@ def remover_cliente(client, avisar=True, motivo="saiu do chat"):
       - NÃO vai para a mensagem pública enviada aos outros clientes, que é
         sempre um texto fixo e genérico. O usuário do chat não precisa saber
         SE a saída foi por /sair, erro de rede, ou outro motivo técnico --
-        só que a pessoa saiu.
+        só que alguém saiu.
     """
     with lock:
         if client in clients:
             index = clients.index(client)
             clients.remove(client)
-            nickname = nicknames.pop(index)
+            endereco = enderecos.pop(index)
         else:
-            nickname = None
+            endereco = None
 
-    if nickname:
+    if endereco:
         # Log interno do servidor: pode ser técnico/detalhado.
-        print(f"[DESCONECTADO] {nickname} — {motivo}")
+        print(f"[DESCONECTADO] {endereco} — {motivo}")
 
         if avisar:
             # Mensagem pública, SEMPRE com o mesmo texto fixo,
             # independentemente do motivo técnico da saída.
-            aviso = f"{PREFIXO_SISTEMA}{nickname} saiu do chat ;-;"
-            broadcast_raw(aviso.encode("utf-8"))
+            broadcast_texto(f"{PREFIXO_SISTEMA}{AVISO_SAIDA}")
 
-    return nickname
+    return endereco
 
 
 def encerrar_tudo():
@@ -108,7 +134,7 @@ def encerrar_tudo():
 
     # Avisa a todos os clientes conectados, em texto puro (comando de
     # controle, nunca cifrado), que a sessão global está encerrando.
-    broadcast_raw(CONTROLE_SAIR.encode("utf-8"))
+    broadcast_texto(CONTROLE_SAIR)
 
     running = False
 
@@ -136,7 +162,7 @@ def encerrar_tudo():
 # THREAD POR CLIENTE: recebe e repassa mensagens de UM cliente
 # ============================================================
 
-def handle(client):
+def handle(client, endereco):
     """
     Roda em uma thread dedicada para cada cliente conectado.
     Fica em loop recebendo dados desse cliente específico e repassando
@@ -150,7 +176,22 @@ def handle(client):
                 # o protocolo de /sair (ex: queda abrupta de rede).
                 raise ConnectionResetError
 
-            texto = dado.decode("utf-8")
+            # --- CAMADA 3 da defesa ASCII: o ponto de estrangulamento ---
+            # Este é o único lugar por onde todo o tráfego do chat passa, e
+            # é o que garante o requisito mesmo contra um cliente
+            # ADULTERADO -- alguém pode reescrever o client.py para pular a
+            # validação de entrada e mandar bytes arbitrários no socket,
+            # mas não consegue fazer esses bytes chegarem a mais ninguém.
+            #
+            # O frame é descartado, e só. A conexão NÃO é derrubada: um
+            # cliente com bug perderia a sessão inteira por causa de uma
+            # mensagem, e descartar já cumpre o requisito de que nada
+            # não-ASCII trafegue.
+            try:
+                texto = ascii_puro.decodificar(dado)
+            except ascii_puro.ErroAscii as erro:
+                print(f"[BLOQUEADO] frame de {endereco} descartado — {erro}")
+                continue
 
             if texto == CONTROLE_SAIR:
                 # Saída VOLUNTÁRIA E INDIVIDUAL: só esse cliente sai.
@@ -191,9 +232,13 @@ def handle(client):
 
 def receive():
     """
-    Fica em loop aceitando novas conexões. Para cada cliente novo, faz o
-    handshake de identidade (NICK) e sobe uma thread dedicada (handle())
-    para cuidar daquele cliente específico dali em diante.
+    Fica em loop aceitando novas conexões. Para cada cliente novo, sobe uma
+    thread dedicada (handle()) para cuidar daquele cliente dali em diante.
+
+    Não existe handshake de identidade: o chat é anônimo. Antes havia uma
+    troca de apelido aqui, que além de trafegar sem validação nem cifra,
+    bloqueava este laço em recv() -- uma conexão nova só era aceita depois
+    que a anterior respondesse.
     """
     while running:
         try:
@@ -203,26 +248,18 @@ def receive():
             # durante o encerramento (encerrar_tudo()).
             break
 
-        print(f"Conectado com {address}")
-
-        # Handshake de identidade: pede o apelido ao cliente.
-        # Não tem relação nenhuma com a escolha de cifra -- isso é
-        # decidido localmente pelo próprio cliente, sem envolver o servidor.
-        client.send("NICK".encode("utf-8"))
-        nickname = client.recv(1024).decode("utf-8")
+        endereco = formatar_endereco(address)
+        print(f"Conectado com {endereco}")
 
         with lock:
-            nicknames.append(nickname)
+            enderecos.append(endereco)
             clients.append(client)
-
-        print(f"Apelido do cliente é {nickname}")
 
         # Notifica os demais clientes (texto puro, marcado com o prefixo
         # de sistema, para eles saberem que não devem tentar decifrar isso).
-        aviso = f"{PREFIXO_SISTEMA}{nickname} entrou no chat :D"
-        broadcast_raw(aviso.encode("utf-8"), remetente=client)
+        broadcast_texto(f"{PREFIXO_SISTEMA}{AVISO_ENTRADA}", remetente=client)
 
-        thread = threading.Thread(target=handle, args=(client,), daemon=True)
+        thread = threading.Thread(target=handle, args=(client, endereco), daemon=True)
         thread.start()
 
 
@@ -252,6 +289,7 @@ def console_admin():
 # ============================================================
 
 print("Servidor está online... (digite /sair para encerrar tudo)")
+print("Modo ASCII: frames com qualquer byte fora de 0-127 são descartados.")
 
 # A aceitação de conexões roda em background (daemon), liberando a thread
 # principal para ficar disponível ao console_admin() e a sinais do SO.

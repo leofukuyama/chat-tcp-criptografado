@@ -5,7 +5,7 @@ C = (P + chave) mod 26   |   P = (C - chave + 26) mod 26
 Normalização: maiúsculas, sem acento, Ç -> C, demais caracteres inalterados.
 """
 
-import unicodedata
+import ascii_puro
 
 ALFABETO = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
@@ -22,23 +22,14 @@ def validar_chave(chave: str) -> tuple[bool, str]:
 def _normalizar(texto: str) -> str:
     """
     Aplica as regras de normalização do enunciado (seção 5):
+      - remoção de acentos (Á -> A, É -> E, ...) e Ç -> C
       - maiúsculas
-      - Ç -> C (feito ANTES da remoção de acento, pois a cedilha some
-        junto com os acentos no processo de decomposição Unicode)
-      - remoção de acentos (Á -> A, É -> E, ...)
       - espaços, números e pontuação permanecem inalterados
-    """
-    texto = texto.upper()
-    texto = texto.replace("Ç", "C")
 
-    # NFD decompõe cada caractere acentuado em "letra base" + "acento
-    # combinante" (ex: "Á" -> "A" + acento). Filtrando fora tudo que é
-    # marca de acentuação (categoria Unicode "Mn"), sobra só a letra base.
-    texto_decomposto = unicodedata.normalize("NFD", texto)
-    texto_sem_acento = "".join(
-        c for c in texto_decomposto if unicodedata.category(c) != "Mn"
-    )
-    return texto_sem_acento
+    A remoção de acento vive em ascii_puro.normalizar(), compartilhada por
+    todas as cifras -- eram quatro cópias praticamente idênticas antes.
+    """
+    return ascii_puro.normalizar(texto).upper()
 
 
 def cifrar(texto: str, chave: str) -> str:

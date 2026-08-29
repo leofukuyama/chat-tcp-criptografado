@@ -7,10 +7,38 @@ original) segue o mesmo formato de cesar.py -- só as LETRAS são
 transformadas; o resto passa direto.
 """
 
-import unicodedata
+import ascii_puro
 
 # 25 letras (sem J -- J é tratado como I, igual à matriz da cifra).
 ALFABETO = "ABCDEFGHIKLMNOPQRSTUVWXYZ"
+
+
+def _eh_letra_da_matriz(caractere: str) -> bool:
+    """
+    Diz se este é um caractere que a matriz 5x5 sabe tratar.
+
+    Substitui o isalpha() que era usado em todo o módulo. isalpha() é
+    verdadeiro para qualquer letra Unicode, incluindo caracteres que não
+    existem na matriz -- eles chegavam em _localizar() e levantavam
+    ValueError, derrubando o cliente. Exemplo real: 'ŉ'.upper() == 'ʼN', e o
+    modificador 'ʼ' passava no isalpha().
+
+    A checagem de comprimento existe porque algumas letras EXPANDEM no
+    upper() ('ß' vira 'SS'), e comparar uma string de 2 caracteres contra o
+    alfabeto daria falso de qualquer jeito -- mas de forma acidental. Aqui é
+    explícito.
+
+    Minúsculas contam como letra da matriz de propósito: a caixa é resolvida
+    por _normalizar() antes de cifrar. Fingir que 'd' não é letra faria
+    decifrar() devolver o texto intacto em silêncio, escondendo o problema.
+
+    >>> _eh_letra_da_matriz("A"), _eh_letra_da_matriz("J")
+    (True, True)
+    >>> _eh_letra_da_matriz("ß"), _eh_letra_da_matriz("П"), _eh_letra_da_matriz("!")
+    (False, False, False)
+    """
+    maiuscula = caractere.upper()
+    return len(maiuscula) == 1 and (maiuscula in ALFABETO or maiuscula == "J")
 
 
 def validar_chave(chave: str) -> tuple[bool, str]:
@@ -20,7 +48,7 @@ def validar_chave(chave: str) -> tuple[bool, str]:
     >>> validar_chave("123")
     (False, 'A chave deve conter ao menos uma letra.')
     """
-    letras = [c for c in chave.upper() if c.isalpha()]
+    letras = [c for c in ascii_puro.normalizar(chave) if _eh_letra_da_matriz(c)]
     if not letras:
         return False, "A chave deve conter ao menos uma letra."
     return True, ""
@@ -35,24 +63,23 @@ def _normalizar(texto: str) -> str:
     >>> _normalizar("Ação, já!")
     'ACAO, JA!'
     """
-    texto = texto.upper()
-    texto = texto.replace("Ç", "C")
-
-    texto_decomposto = unicodedata.normalize("NFD", texto)
-    texto_sem_acento = "".join(
-        c for c in texto_decomposto if unicodedata.category(c) != "Mn"
-    )
-    return texto_sem_acento
+    return ascii_puro.normalizar(texto).upper()
 
 
 def _extrair_letras(texto_normalizado: str) -> list[str]:
     """
-    Só as letras, na ordem em que aparecem, com J fundido em I.
+    Só as letras da matriz, na ordem em que aparecem, com J fundido em I.
+    Letras de outros alfabetos são ignoradas aqui e tratadas como pontuação
+    mais adiante -- ver _eh_letra_da_matriz().
 
     >>> _extrair_letras("ACAO, JA!")
     ['A', 'C', 'A', 'O', 'I', 'A']
     """
-    return ["I" if c == "J" else c for c in texto_normalizado if c.isalpha()]
+    return [
+        "I" if c == "J" else c
+        for c in texto_normalizado
+        if _eh_letra_da_matriz(c)
+    ]
 
 
 def _montar_matriz(chave: str) -> list[str]:
@@ -165,7 +192,7 @@ def cifrar(texto: str, chave: str) -> str:
     resultado = []
     j = 0
     for c in texto_normalizado:
-        if c.isalpha():
+        if _eh_letra_da_matriz(c):
             resultado.append(saida[j][0])
             j += 1
             # X de preenchimento por letra duplicada gruda logo depois
@@ -206,13 +233,15 @@ def _remover_x_de_preenchimento(caracteres: list[str]) -> list[str]:
         if (
             c == "X"
             and 0 < i < len(caracteres) - 1
-            and caracteres[i - 1].isalpha()
+            and _eh_letra_da_matriz(caracteres[i - 1])
             and caracteres[i - 1] == caracteres[i + 1]
         ):
             continue
         sem_duplicatas.append(c)
 
-    indices_letras = [i for i, c in enumerate(sem_duplicatas) if c.isalpha()]
+    indices_letras = [
+        i for i, c in enumerate(sem_duplicatas) if _eh_letra_da_matriz(c)
+    ]
     if indices_letras and sem_duplicatas[indices_letras[-1]] == "X":
         del sem_duplicatas[indices_letras[-1]]
 
@@ -229,7 +258,7 @@ def decifrar(texto: str, chave: str) -> str:
     'HELLO WORLD'
     """
     matriz = _montar_matriz(chave)
-    letras_cifradas = [c for c in texto if c.isalpha()]
+    letras_cifradas = [c for c in texto if _eh_letra_da_matriz(c)]
 
     letras_decifradas = []
     for i in range(0, len(letras_cifradas) - 1, 2):
@@ -240,6 +269,6 @@ def decifrar(texto: str, chave: str) -> str:
     resultado = []
     it = iter(letras_decifradas)
     for c in texto:
-        resultado.append(next(it) if c.isalpha() else c)
+        resultado.append(next(it) if _eh_letra_da_matriz(c) else c)
 
     return "".join(_remover_x_de_preenchimento(resultado))

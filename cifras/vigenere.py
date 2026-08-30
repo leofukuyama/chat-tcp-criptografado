@@ -57,6 +57,30 @@ def validar_chave(chave: str) -> tuple[bool, str]:
     return True, ""
 
 
+def _preparar_chave(chave: str) -> str:
+    """
+    Normaliza a chave e garante que ela é utilizável, ANTES de qualquer
+    conta depender dela.
+
+    Existe porque cifrar()/decifrar() não podem confiar em ter sido
+    chamadas depois de validar_chave(): o chat valida, mas os testes e
+    qualquer outro chamador podem não validar. Sem esta checagem, chave
+    vazia estourava ZeroDivisionError lá dentro, em "j % len(chave)" --
+    um erro que não diz absolutamente nada sobre a causa real.
+
+    A regra NÃO é duplicada aqui de propósito: quem decide o que é uma
+    chave válida continua sendo validar_chave(), para não existirem duas
+    respostas diferentes para a mesma pergunta.
+
+    >>> _preparar_chave("cháve")
+    'CHAVE'
+    """
+    valida, erro = validar_chave(chave)
+    if not valida:
+        raise ValueError(erro)
+    return _normalizar(chave).upper()
+
+
 def _normalizar(texto: str) -> str:
     """
     Remove acentos do texto, mantendo a letra "base".
@@ -100,9 +124,10 @@ def cifrar(texto: str, chave: str) -> str:
         - Maiúsculas/minúsculas do texto original são preservadas no resultado.
     """
     # 1) Normaliza texto e chave (remove acentos, chave sempre em maiúsculas
-    #    para facilitar o cálculo do deslocamento)
+    #    para facilitar o cálculo do deslocamento). _preparar_chave também
+    #    recusa chave vazia ou fora de A-Z, com mensagem explicando o motivo.
     texto = _normalizar(texto)
-    chave = _normalizar(chave).upper()
+    chave = _preparar_chave(chave)
 
     resultado = []
     j = 0  # índice que percorre a CHAVE; só avança quando cifra uma letra de verdade
@@ -162,9 +187,9 @@ def decifrar(texto: str, chave: str) -> str:
         - espaços/pontuação são mantidos e não avançam a chave
         - maiúsculas/minúsculas são preservadas
     """
-    # 1) Mesma normalização feita na cifragem
+    # 1) Mesma normalização (e mesma validação) feita na cifragem
     texto = _normalizar(texto)
-    chave = _normalizar(chave).upper()
+    chave = _preparar_chave(chave)
 
     resultado = []
     j = 0  # índice que percorre a CHAVE, igual na função cifrar()

@@ -167,14 +167,20 @@ def diag_validar_chave_aceita_letra_fora_de_az():
 
 
 def diag_cifrar_com_chave_vazia_estoura():
-    """As funções não se defendem sozinhas: hoje a validação só acontece na
-    camada do chat (client.py). Chamar cifrar() direto com chave vazia dá
-    ZeroDivisionError em 'j % len(chave)'; com chave numérica, devolve
-    lixo silenciosamente."""
+    """As funções precisam se defender sozinhas, sem depender de o chamador
+    ter passado por validar_chave() antes.
+
+    Antes, chave vazia dava ZeroDivisionError em 'j % len(chave)' -- um
+    erro que não diz nada sobre a causa. O esperado é um ValueError
+    explicando o problema, que é o que validar_chave() já respondia."""
     try:
         vigenere.cifrar("ATAQUE", "")
     except ZeroDivisionError:
         assert False, "cifrar() com chave vazia estourou ZeroDivisionError em vez de erro claro"
+    except ValueError as e:
+        assert "vazia" in str(e).lower(), f"erro pouco claro para chave vazia: {e}"
+    else:
+        assert False, "cifrar() aceitou chave vazia em silêncio"
 
 
 TESTES = [

@@ -5,7 +5,30 @@ Espaços/pontuação não avançam a chave.
 C = (P + K) mod 26   |   P = (C - K + 26) mod 26
 """
 
-import unicodedata
+import string
+
+import ascii_puro
+
+# Letras que esta cifra sabe tratar: só o alfabeto latino ASCII, maiúsculo e
+# minúsculo. Qualquer outra "letra" (grego, cirílico, ß) fica de fora.
+LETRAS_ASCII = string.ascii_letters
+
+
+def _eh_letra_ascii(caractere: str) -> bool:
+    """
+    Substitui o isalpha() usado antes em todo o módulo.
+
+    isalpha() é verdadeiro para QUALQUER letra Unicode, e isso causava dois
+    defeitos reais:
+      - 'Ω' entrava na conta como se fosse letra latina, o "% 26" destruía o
+        valor, e o texto decifrado nunca voltava ao original (perda silenciosa);
+      - 'ß'.upper() devolve 'SS' (dois caracteres), e ord() estourava
+        TypeError -- ou seja, digitar 'ß' no chat derrubava o cliente.
+
+    Restringindo a A-Z ASCII, esses caracteres passam direto como pontuação:
+    não são cifrados, mas também não são corrompidos nem quebram nada.
+    """
+    return caractere in LETRAS_ASCII
 
 
 def validar_chave(chave: str) -> tuple[bool, str]:
@@ -14,7 +37,11 @@ def validar_chave(chave: str) -> tuple[bool, str]:
 
     Regras:
         - não pode ser vazia
-        - deve conter apenas letras (sem números, espaços ou símbolos)
+        - depois de normalizada (sem acento), deve conter apenas letras A-Z
+
+    A normalização vem antes para que "cháve" seja aceita -- é exatamente o
+    que cifrar() faz com ela. Já uma chave em grego ou cirílico é rejeitada:
+    a cifra não sabe converter essas letras em deslocamento.
 
     Retorna:
         (True, "")           -> se a chave for válida
@@ -22,9 +49,36 @@ def validar_chave(chave: str) -> tuple[bool, str]:
     """
     if not chave:
         return False, "A chave não pode ser vazia."
-    if not chave.isalpha():
-        return False, "A chave deve conter apenas letras."
+
+    chave_normalizada = ascii_puro.normalizar(chave)
+    if not all(_eh_letra_ascii(c) for c in chave_normalizada):
+        return False, "A chave deve conter apenas letras de A a Z."
+
     return True, ""
+
+
+def _preparar_chave(chave: str) -> str:
+    """
+    Normaliza a chave e garante que ela é utilizável, ANTES de qualquer
+    conta depender dela.
+
+    Existe porque cifrar()/decifrar() não podem confiar em ter sido
+    chamadas depois de validar_chave(): o chat valida, mas os testes e
+    qualquer outro chamador podem não validar. Sem esta checagem, chave
+    vazia estourava ZeroDivisionError lá dentro, em "j % len(chave)" --
+    um erro que não diz absolutamente nada sobre a causa real.
+
+    A regra NÃO é duplicada aqui de propósito: quem decide o que é uma
+    chave válida continua sendo validar_chave(), para não existirem duas
+    respostas diferentes para a mesma pergunta.
+
+    >>> _preparar_chave("cháve")
+    'CHAVE'
+    """
+    valida, erro = validar_chave(chave)
+    if not valida:
+        raise ValueError(erro)
+    return _normalizar(chave).upper()
 
 
 def _normalizar(texto: str) -> str:
@@ -42,9 +96,12 @@ def _normalizar(texto: str) -> str:
            ou seja, remove o acento e mantém só a letra base.
 
     Espaços, números e pontuação não são afetados por essa função.
+
+    A implementação vive em ascii_puro.normalizar(), compartilhada por todas
+    as cifras. Note que ela NÃO mexe em maiúsculas/minúsculas -- é justamente
+    disso que esta cifra depende para preservar a caixa do texto original.
     """
-    nfkd = unicodedata.normalize("NFD", texto)
-    return "".join(caractere for caractere in nfkd if unicodedata.category(caractere) != "Mn")
+    return ascii_puro.normalizar(texto)
 
 
 def cifrar(texto: str, chave: str) -> str:
@@ -67,9 +124,10 @@ def cifrar(texto: str, chave: str) -> str:
         - Maiúsculas/minúsculas do texto original são preservadas no resultado.
     """
     # 1) Normaliza texto e chave (remove acentos, chave sempre em maiúsculas
-    #    para facilitar o cálculo do deslocamento)
+    #    para facilitar o cálculo do deslocamento). _preparar_chave também
+    #    recusa chave vazia ou fora de A-Z, com mensagem explicando o motivo.
     texto = _normalizar(texto)
-    chave = _normalizar(chave).upper()
+    chave = _preparar_chave(chave)
 
     resultado = []
     j = 0  # índice que percorre a CHAVE; só avança quando cifra uma letra de verdade
@@ -77,9 +135,10 @@ def cifrar(texto: str, chave: str) -> str:
     # 2) Percorre cada caractere do texto (i-ésima posição)
     for letra in texto:
 
-        # 2.1) Caracteres que não são letras (espaço, vírgula, número...)
-        #      são mantidos como estão e NÃO avançam a chave (o "j" não muda)
-        if not letra.isalpha():
+        # 2.1) Caracteres que não são letras de A-Z (espaço, vírgula, número,
+        #      ou letra de outro alfabeto) são mantidos como estão e NÃO
+        #      avançam a chave (o "j" não muda)
+        if not _eh_letra_ascii(letra):
             resultado.append(letra)
             continue
 
@@ -128,9 +187,9 @@ def decifrar(texto: str, chave: str) -> str:
         - espaços/pontuação são mantidos e não avançam a chave
         - maiúsculas/minúsculas são preservadas
     """
-    # 1) Mesma normalização feita na cifragem
+    # 1) Mesma normalização (e mesma validação) feita na cifragem
     texto = _normalizar(texto)
-    chave = _normalizar(chave).upper()
+    chave = _preparar_chave(chave)
 
     resultado = []
     j = 0  # índice que percorre a CHAVE, igual na função cifrar()
@@ -138,8 +197,9 @@ def decifrar(texto: str, chave: str) -> str:
     # 2) Percorre cada caractere do texto cifrado
     for letra in texto:
 
-        # 2.1) Caracteres que não são letras são mantidos e não avançam a chave
-        if not letra.isalpha():
+        # 2.1) Caracteres que não são letras de A-Z são mantidos e não
+        #      avançam a chave (mesma regra da cifragem)
+        if not _eh_letra_ascii(letra):
             resultado.append(letra)
             continue
 

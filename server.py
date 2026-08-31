@@ -2,6 +2,8 @@ import threading
 import socket
 import sys
 
+import protocolo
+
 # ============================================================
 # CONFIGURAÇÃO E INICIALIZAÇÃO DO SOCKET DO SERVIDOR
 # ============================================================
@@ -23,13 +25,25 @@ server.listen()
 # Cada cliente conectado gera sua própria thread (handle()), então essas
 # estruturas são acessadas concorrentemente e precisam de proteção (lock).
 
-clients = []        # lista de sockets dos clientes conectados
-lock = threading.Lock()  # protege clients contra race conditions
-running = True       # flag global: controla o encerramento ordenado do servidor
+clients = []       # lista de sockets dos clientes conectados
+enderecos = []     # lista paralela de endereços (mesmo índice de clients)
+lock = threading.Lock()  # protege clients/enderecos contra race conditions
+running = True      # flag global: controla o encerramento ordenado do servidor
 
-CONTROLE_SAIR = "/sair"      # comando de controle: texto puro, nunca cifrado
-PREFIXO_SISTEMA = "SYS:"     # marca mensagens geradas pelo servidor (não cifradas),
-                              # para o cliente saber que NÃO deve tentar decifrar
+COMANDO_SAIR = "/sair"
+
+# O chat é anônimo: não existe apelido em lugar nenhum do protocolo. As
+# mensagens de entrada e saída são genéricas de propósito. O endereço de
+# quem conectou fica SÓ no log do console do servidor, nunca é transmitido
+# aos outros clientes.
+AVISO_ENTRADA = "Alguem entrou no chat :D"
+AVISO_SAIDA = "Alguem saiu do chat ;-;"
+
+
+def formatar_endereco(address) -> str:
+    """address vem do accept() como tupla (ip, porta)."""
+    ip, porta = address
+    return f"{ip}:{porta}"
 
 
 # ============================================================
@@ -55,19 +69,38 @@ def broadcast_raw(dado_bytes, remetente=None):
             pass
 
 
+def broadcast_quadro(tipo, texto, remetente=None):
+    """
+    Monta e envia um quadro gerado pelo PRÓPRIO servidor.
+
+    Este é o único caminho por onde saem quadros de tipo S (sistema), e é o
+    que sustenta a garantia anti-falsificação: quadros S vindos de clientes
+    são recusados em tratar_quadro(), então um aviso de sistema que chega a
+    um cliente veio necessariamente daqui.
+
+    empacotar() usa ascii_puro.codificar() por dentro (errors="strict"), de
+    modo que um aviso escrito com acento estoura aqui, no console do
+    servidor, em vez de vazar bytes não-ASCII na rede.
+    """
+    broadcast_raw(protocolo.empacotar(tipo, texto), remetente=remetente)
+
+
 # ============================================================
 # GERENCIAMENTO DE DESCONEXÃO
 # ============================================================
 
 def remover_cliente(client, avisar=True, motivo="saiu do chat"):
     """
-    Remove um cliente da lista compartilhada e notifica o restante da sala.
+    Remove um cliente das listas compartilhadas e notifica o restante da sala.
 
-    Sem nickname, não há mais nome para identificar o cliente publicamente
-    -- a mensagem enviada aos outros participantes é sempre genérica.
-    Para o log interno do servidor (só visível para quem está operando o
-    servidor), usamos o endereço da conexão (ip:porta) como identificador,
-    já que ele ainda está disponível no socket antes de fechá-lo.
+    O parâmetro `motivo` tem DOIS destinos diferentes e propositalmente
+    separados:
+      - vai para o print() do console do servidor (log técnico, detalhado,
+        só visível para quem está operando o servidor);
+      - NÃO vai para a mensagem pública enviada aos outros clientes, que é
+        sempre um texto fixo e genérico. O usuário do chat não precisa saber
+        SE a saída foi por /sair, erro de rede, ou outro motivo técnico --
+        só que alguém saiu.
     """
     endereco = None
     with lock:
@@ -77,16 +110,20 @@ def remover_cliente(client, avisar=True, motivo="saiu do chat"):
             except OSError:
                 endereco = None
             clients.remove(client)
+            endereco = enderecos.pop(index)
+        else:
+            endereco = None
 
-    if endereco is not None:
+    if endereco:
         # Log interno do servidor: pode ser técnico/detalhado.
         print(f"[DESCONECTADO] {endereco} — {motivo}")
 
         if avisar:
             # Mensagem pública, SEMPRE com o mesmo texto fixo,
             # independentemente do motivo técnico da saída.
-            aviso = f"{PREFIXO_SISTEMA}Um participante saiu do chat ;-;"
-            broadcast_raw(aviso.encode("utf-8"))
+            broadcast_quadro(protocolo.TIPO_SISTEMA, AVISO_SAIDA)
+
+    return endereco
 
 
 def encerrar_tudo():
@@ -101,9 +138,9 @@ def encerrar_tudo():
     global running
     print("\n[ADMIN] Encerrando servidor e todos os clientes...")
 
-    # Avisa a todos os clientes conectados, em texto puro (comando de
-    # controle, nunca cifrado), que a sessão global está encerrando.
-    broadcast_raw(CONTROLE_SAIR.encode("utf-8"))
+    # Avisa a todos os clientes conectados, com um quadro de controle
+    # (nunca cifrado), que a sessão global está encerrando.
+    broadcast_quadro(protocolo.TIPO_CONTROLE, COMANDO_SAIR)
 
     running = False
 
@@ -128,15 +165,68 @@ def encerrar_tudo():
 
 
 # ============================================================
+# TRATAMENTO DE UM QUADRO RECEBIDO DE UM CLIENTE
+# ============================================================
+
+def tratar_quadro(client, endereco, quadro):
+    """
+    Decide o que fazer com um quadro completo vindo de um cliente.
+    Devolve False quando esse cliente deve ser desconectado.
+    """
+    # --- Payload não-ASCII: CAMADA 3 da defesa ASCII ---
+    # Este é o ponto de estrangulamento por onde todo o tráfego passa, e é o
+    # que garante o requisito mesmo contra um cliente ADULTERADO -- alguém
+    # pode reescrever o client.py para pular a validação de entrada, mas não
+    # consegue fazer esses bytes chegarem a mais ninguém.
+    #
+    # O quadro é descartado, e só. A conexão NÃO cai: como o tamanho vem no
+    # cabeçalho, sabemos exatamente onde este quadro termina, então o
+    # próximo continua alinhado e a sessão segue normalmente.
+    if quadro.texto is None:
+        print(f"[BLOQUEADO] quadro de {endereco} descartado — {quadro.erro}")
+        return True
+
+    # --- Tentativa de falsificar um aviso do servidor ---
+    # Só o servidor emite quadros de sistema. Antes, quando o tipo era
+    # adivinhado pelo conteúdo, bastava digitar "SYS:..." usando a opção
+    # "sem criptografia" para forjar um aviso oficial.
+    if quadro.tipo == protocolo.TIPO_SISTEMA:
+        print(f"[BLOQUEADO] {endereco} tentou enviar um quadro de sistema")
+        return True
+
+    if quadro.tipo == protocolo.TIPO_CONTROLE:
+        if quadro.texto == COMANDO_SAIR:
+            # Saída VOLUNTÁRIA E INDIVIDUAL: só esse cliente sai.
+            # (Diferente de encerrar_tudo(), que é acionado pelo console do
+            # servidor e derruba a sala inteira.)
+            remover_cliente(client, motivo="saída voluntária (/sair)")
+            return False
+        print(f"[IGNORADO] comando desconhecido de {endereco}: {quadro.texto!r}")
+        return True
+
+    # --- Conteúdo de chat de verdade ---
+    # O servidor só EXIBE o payload cifrado recebido (prova de que não está
+    # lendo o conteúdo) e repassa o quadro inteiro adiante, sem decifrar.
+    print(f"[CIFRADO recebido] {quadro.texto}")
+    broadcast_raw(quadro.bytes_completos, remetente=client)
+    return True
+
+
+# ============================================================
 # THREAD POR CLIENTE: recebe e repassa mensagens de UM cliente
 # ============================================================
 
-def handle(client):
+def handle(client, endereco):
     """
     Roda em uma thread dedicada para cada cliente conectado.
     Fica em loop recebendo dados desse cliente específico e repassando
     (via broadcast_raw) para os demais.
     """
+    # Um desempacotador POR CONEXÃO: o buffer guarda o quadro parcial deste
+    # fluxo específico, e compartilhá-lo entre clientes embaralharia as
+    # mensagens de ambos.
+    desempacotador = protocolo.Desempacotador()
+
     while True:
         try:
             dado = client.recv(1024)
@@ -145,13 +235,24 @@ def handle(client):
                 # o protocolo de /sair (ex: queda abrupta de rede).
                 raise ConnectionResetError
 
-            texto = dado.decode("utf-8")
+            try:
+                quadros = desempacotador.alimentar(dado)
+            except protocolo.ErroProtocolo as erro:
+                # Cabeçalho corrompido: sem um tamanho confiável não dá para
+                # saber onde este quadro termina, então não dá para pular
+                # só ele. O fluxo está perdido e insistir seria interpretar
+                # lixo -- encerrar esta conexão é a saída honesta.
+                remover_cliente(client, motivo=f"protocolo inválido — {erro}")
+                client.close()
+                break
 
-            if texto == CONTROLE_SAIR:
-                # Saída VOLUNTÁRIA E INDIVIDUAL: só esse cliente sai.
-                # (Diferente de encerrar_tudo(), que é acionado pelo
-                # console do servidor e derruba a sala inteira.)
-                remover_cliente(client, motivo="saída voluntária (/sair)")
+            continuar = True
+            for quadro in quadros:
+                if not tratar_quadro(client, endereco, quadro):
+                    continuar = False
+                    break
+
+            if not continuar:
                 try:
                     # Mesmo padrão de shutdown+close usado em encerrar_tudo(),
                     # por consistência: garante que o FIN seja enviado de
@@ -161,12 +262,6 @@ def handle(client):
                     pass
                 client.close()
                 break
-
-            # Conteúdo de chat "de verdade": o servidor só EXIBE o payload
-            # cifrado recebido (prova de que não está lendo o conteúdo) e
-            # repassa os mesmos bytes adiante, sem decifrar.
-            print(f"[CIFRADO recebido] {texto}")
-            broadcast_raw(dado, remetente=client)
 
         except (ConnectionResetError, ConnectionAbortedError):
             # Queda abrupta: cliente fechou o terminal, perdeu rede, etc.
@@ -186,12 +281,13 @@ def handle(client):
 
 def receive():
     """
-    Fica em loop aceitando novas conexões. Para cada cliente novo, adiciona
-    o socket à lista compartilhada e sobe uma thread dedicada (handle())
-    para cuidar daquele cliente específico dali em diante.
+    Fica em loop aceitando novas conexões. Para cada cliente novo, sobe uma
+    thread dedicada (handle()) para cuidar daquele cliente dali em diante.
 
-    Não há mais handshake de identidade (NICK): o servidor não precisa de
-    um nome para gerenciar o cliente, o próprio objeto socket já basta.
+    Não existe handshake de identidade: o chat é anônimo. Antes havia uma
+    troca de apelido aqui, que além de trafegar sem validação nem cifra,
+    bloqueava este laço em recv() -- uma conexão nova só era aceita depois
+    que a anterior respondesse.
     """
     while running:
         try:
@@ -201,17 +297,16 @@ def receive():
             # durante o encerramento (encerrar_tudo()).
             break
 
-        print(f"Conectado com {address}")
+        endereco = formatar_endereco(address)
+        print(f"Conectado com {endereco}")
 
         with lock:
+            enderecos.append(endereco)
             clients.append(client)
 
-        # Notifica os demais clientes (texto puro, marcado com o prefixo
-        # de sistema, para eles saberem que não devem tentar decifrar isso).
-        aviso = f"{PREFIXO_SISTEMA}Um novo participante entrou no chat :D"
-        broadcast_raw(aviso.encode("utf-8"), remetente=client)
+        broadcast_quadro(protocolo.TIPO_SISTEMA, AVISO_ENTRADA, remetente=client)
 
-        thread = threading.Thread(target=handle, args=(client,), daemon=True)
+        thread = threading.Thread(target=handle, args=(client, endereco), daemon=True)
         thread.start()
 
 
@@ -231,7 +326,7 @@ def console_admin():
             cmd = input()
         except EOFError:
             break
-        if cmd.strip() == CONTROLE_SAIR:
+        if cmd.strip() == COMANDO_SAIR:
             encerrar_tudo()
             break
 
@@ -241,6 +336,7 @@ def console_admin():
 # ============================================================
 
 print("Servidor está online... (digite /sair para encerrar tudo)")
+print("Modo ASCII: quadros com qualquer byte fora de 0-127 são descartados.")
 
 # A aceitação de conexões roda em background (daemon), liberando a thread
 # principal para ficar disponível ao console_admin() e a sinais do SO.

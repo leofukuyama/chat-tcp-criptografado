@@ -7,10 +7,50 @@ original) segue o mesmo formato de cesar.py -- só as LETRAS são
 transformadas; o resto passa direto.
 """
 
-import unicodedata
+import ascii_puro
 
 # 25 letras (sem J -- J é tratado como I, igual à matriz da cifra).
 ALFABETO = "ABCDEFGHIKLMNOPQRSTUVWXYZ"
+
+# Letra usada para separar um par de letras iguais e para completar um
+# texto de tamanho ímpar.
+FILLER = "X"
+
+# Filler usado quando a própria letra duplicada é o X. Sem ele, "XX" vira
+# o par (X, X) -- que as regras de linha e coluna não separam, porque
+# deslocar duas letras idênticas devolve duas letras idênticas. O Playfair
+# clássico troca de filler exatamente por isso.
+FILLER_ALTERNATIVO = "Q"
+
+FILLERS = (FILLER, FILLER_ALTERNATIVO)
+
+
+def _eh_letra_da_matriz(caractere: str) -> bool:
+    """
+    Diz se este é um caractere que a matriz 5x5 sabe tratar.
+
+    Substitui o isalpha() que era usado em todo o módulo. isalpha() é
+    verdadeiro para qualquer letra Unicode, incluindo caracteres que não
+    existem na matriz -- eles chegavam em _localizar() e levantavam
+    ValueError, derrubando o cliente. Exemplo real: 'ŉ'.upper() == 'ʼN', e o
+    modificador 'ʼ' passava no isalpha().
+
+    A checagem de comprimento existe porque algumas letras EXPANDEM no
+    upper() ('ß' vira 'SS'), e comparar uma string de 2 caracteres contra o
+    alfabeto daria falso de qualquer jeito -- mas de forma acidental. Aqui é
+    explícito.
+
+    Minúsculas contam como letra da matriz de propósito: a caixa é resolvida
+    por _normalizar() antes de cifrar. Fingir que 'd' não é letra faria
+    decifrar() devolver o texto intacto em silêncio, escondendo o problema.
+
+    >>> _eh_letra_da_matriz("A"), _eh_letra_da_matriz("J")
+    (True, True)
+    >>> _eh_letra_da_matriz("ß"), _eh_letra_da_matriz("П"), _eh_letra_da_matriz("!")
+    (False, False, False)
+    """
+    maiuscula = caractere.upper()
+    return len(maiuscula) == 1 and (maiuscula in ALFABETO or maiuscula == "J")
 
 
 def validar_chave(chave: str) -> tuple[bool, str]:
@@ -20,7 +60,7 @@ def validar_chave(chave: str) -> tuple[bool, str]:
     >>> validar_chave("123")
     (False, 'A chave deve conter ao menos uma letra.')
     """
-    letras = [c for c in chave.upper() if c.isalpha()]
+    letras = [c for c in ascii_puro.normalizar(chave) if _eh_letra_da_matriz(c)]
     if not letras:
         return False, "A chave deve conter ao menos uma letra."
     return True, ""
@@ -35,24 +75,23 @@ def _normalizar(texto: str) -> str:
     >>> _normalizar("Ação, já!")
     'ACAO, JA!'
     """
-    texto = texto.upper()
-    texto = texto.replace("Ç", "C")
-
-    texto_decomposto = unicodedata.normalize("NFD", texto)
-    texto_sem_acento = "".join(
-        c for c in texto_decomposto if unicodedata.category(c) != "Mn"
-    )
-    return texto_sem_acento
+    return ascii_puro.normalizar(texto).upper()
 
 
 def _extrair_letras(texto_normalizado: str) -> list[str]:
     """
-    Só as letras, na ordem em que aparecem, com J fundido em I.
+    Só as letras da matriz, na ordem em que aparecem, com J fundido em I.
+    Letras de outros alfabetos são ignoradas aqui e tratadas como pontuação
+    mais adiante -- ver _eh_letra_da_matriz().
 
     >>> _extrair_letras("ACAO, JA!")
     ['A', 'C', 'A', 'O', 'I', 'A']
     """
-    return ["I" if c == "J" else c for c in texto_normalizado if c.isalpha()]
+    return [
+        "I" if c == "J" else c
+        for c in texto_normalizado
+        if _eh_letra_da_matriz(c)
+    ]
 
 
 def _montar_matriz(chave: str) -> list[str]:
@@ -99,15 +138,22 @@ def _localizar(matriz: list[str], letra: str) -> tuple[int, int]:
 def _montar_pares(letras: list[str]) -> list[tuple[str, bool, str, bool]]:
     """
     Agrupa as letras em pares (regras clássicas do Playfair):
-      - par com as duas letras iguais -> insere X no lugar da segunda;
+      - par com as duas letras iguais -> insere um filler no lugar da
+        segunda (X, ou Q quando a letra duplicada é o próprio X);
       - letra sobrando no final (quantidade ímpar) -> completa com X.
     Cada item retornado é (letra_a, a_é_real, letra_b, b_é_real); a
     marcação "é_real" diz se a letra veio do texto original ou se é um
-    X de preenchimento -- usado depois para saber onde encaixar cada
-    letra cifrada na reconstrução da mensagem.
+    caractere de preenchimento -- usado depois para saber onde encaixar
+    cada letra cifrada na reconstrução da mensagem.
+
+    O preenchimento FINAL é sempre X, nunca Q, e isso importa na hora de
+    decifrar: um Q no fim da mensagem é sempre uma letra de verdade
+    ("IRAQ"), então nunca precisa ser adivinhado.
 
     >>> _montar_pares(["H", "E", "L", "L", "O"])
     [('H', True, 'E', True), ('L', True, 'X', False), ('L', True, 'O', True)]
+    >>> _montar_pares(["X", "X"])
+    [('X', True, 'Q', False), ('X', True, 'X', False)]
     """
     pares = []
     i = 0
@@ -116,8 +162,14 @@ def _montar_pares(letras: list[str]) -> list[tuple[str, bool, str, bool]]:
         if i + 1 < len(letras) and letras[i + 1] != a:
             pares.append((a, True, letras[i + 1], True))
             i += 2
+        elif i + 1 < len(letras):
+            # Duas letras iguais: separa com o filler adequado à letra.
+            filler = FILLER_ALTERNATIVO if a == FILLER else FILLER
+            pares.append((a, True, filler, False))
+            i += 1
         else:
-            pares.append((a, True, "X", False))
+            # Sobrou uma letra no fim: completa sempre com X.
+            pares.append((a, True, FILLER, False))
             i += 1
     return pares
 
@@ -165,7 +217,7 @@ def cifrar(texto: str, chave: str) -> str:
     resultado = []
     j = 0
     for c in texto_normalizado:
-        if c.isalpha():
+        if _eh_letra_da_matriz(c):
             resultado.append(saida[j][0])
             j += 1
             # X de preenchimento por letra duplicada gruda logo depois
@@ -187,49 +239,85 @@ def cifrar(texto: str, chave: str) -> str:
 
 def _remover_x_de_preenchimento(caracteres: list[str]) -> list[str]:
     """
-    Limpeza heurística dos X inseridos por cifrar(): remove um X quando
-    está entre duas letras iguais (LXL -> LL, caso de letra duplicada)
-    e remove um X isolado que sobra como última letra da mensagem
+    Limpeza heurística dos fillers inseridos por cifrar(): remove um
+    filler que esteja entre duas letras iguais (LXL -> LL, caso de letra
+    duplicada) e remove um X que sobre como última letra da mensagem
     (padding de texto com número ímpar de letras).
+
+    A conta é feita sobre a sequência de LETRAS, ignorando espaços e
+    pontuação. A versão anterior comparava os caracteres imediatamente
+    vizinhos, e com isso não reconhecia o filler em "L L": o vizinho do X
+    era o espaço, não a letra L que o originou, e o X sobrava no texto
+    decifrado.
+
+    A posição também entra na conta: um filler é sempre a SEGUNDA letra
+    de um par, logo está sempre em índice ímpar da sequência de letras.
+    Isso evita remover uma letra real que por acaso caia entre duas
+    iguais.
+
+    Só o X é removido no fim da mensagem, nunca o Q -- ver _montar_pares:
+    o preenchimento final é sempre X, então uma mensagem terminada em Q
+    ("IRAQ") não corre risco.
 
     Não há garantia absoluta -- se a mensagem original genuinamente
     tivesse um X nessas posições (ex.: terminar em "RAIO X"), ele
     também seria removido por engano. É a mesma ambiguidade que existe
-    ao decifrar Playfair manualmente: o X de preenchimento só se
-    distingue de um X real pelo contexto.
+    ao decifrar Playfair manualmente: o filler só se distingue de uma
+    letra real pelo contexto.
 
     >>> "".join(_remover_x_de_preenchimento(list("HELXLO WORLDX")))
     'HELLO WORLD'
+    >>> "".join(_remover_x_de_preenchimento(list("LX LX")))
+    'L L'
+    >>> "".join(_remover_x_de_preenchimento(list("IRAQ")))
+    'IRAQ'
     """
-    sem_duplicatas = []
-    for i, c in enumerate(caracteres):
-        if (
-            c == "X"
-            and 0 < i < len(caracteres) - 1
-            and caracteres[i - 1].isalpha()
-            and caracteres[i - 1] == caracteres[i + 1]
-        ):
-            continue
-        sem_duplicatas.append(c)
+    # posicoes[k] = onde a k-ésima letra está na lista original, para
+    # devolver espaços e pontuação intactos no fim.
+    posicoes = [i for i, c in enumerate(caracteres) if _eh_letra_da_matriz(c)]
+    letras = [caracteres[i] for i in posicoes]
 
-    indices_letras = [i for i, c in enumerate(sem_duplicatas) if c.isalpha()]
-    if indices_letras and sem_duplicatas[indices_letras[-1]] == "X":
-        del sem_duplicatas[indices_letras[-1]]
+    descartar = set()
 
-    return sem_duplicatas
+    # Filler de letra duplicada: índice ímpar, cercado por duas letras
+    # iguais que não são ele mesmo.
+    for k in range(1, len(letras) - 1, 2):
+        if letras[k] in FILLERS and letras[k - 1] == letras[k + 1] != letras[k]:
+            descartar.add(posicoes[k])
+
+    # Filler de padding: só existe quando o texto tinha número ímpar de
+    # letras, e nesse caso é sempre o X final.
+    if letras and letras[-1] == FILLER and posicoes[-1] not in descartar:
+        descartar.add(posicoes[-1])
+
+    return [c for i, c in enumerate(caracteres) if i not in descartar]
 
 
 def decifrar(texto: str, chave: str) -> str:
     """
-    Não normaliza o texto de novo aqui: o texto recebido já é o
-    CIFRADO, no mesmo formato produzido por cifrar() -- espaços,
-    números e pontuação já estão na posição final.
+    O caminho feliz é receber o que cifrar() produziu: maiúsculas, sem
+    acento, número par de letras. Mas decifrar() não pode DEPENDER disso.
+
+    No chat, o texto vem da rede: se o outro participante escolheu outra
+    cifra, ou a mensagem é de alguém falando outro dialeto, chega aqui
+    algo que não saiu deste cifrar(). Antes, minúscula levantava
+    ValueError em _localizar() e número ímpar de letras levantava
+    StopIteration -- e as duas derrubavam o cliente inteiro, porque a
+    thread de recepção não sobrevive a uma exceção. Decifrar lixo tem de
+    produzir lixo, não uma queda.
 
     >>> decifrar("DMYRAN VQCRGE", "PLAYFAIR EXAMPLE")
     'HELLO WORLD'
+    >>> decifrar("dmyran vqcrge", "PLAYFAIR EXAMPLE")
+    'HELLO WORLD'
     """
     matriz = _montar_matriz(chave)
-    letras_cifradas = [c for c in texto if c.isalpha()]
+
+    # Mesma normalização de cifrar(): é o que permite receber minúscula
+    # ou acento sem estourar. _extrair_letras já funde J em I, então
+    # nenhuma letra chega em _localizar() sem estar na matriz.
+    texto_normalizado = _normalizar(texto)
+    letras_cifradas = _extrair_letras(texto_normalizado)
 
     letras_decifradas = []
     for i in range(0, len(letras_cifradas) - 1, 2):
@@ -237,9 +325,16 @@ def decifrar(texto: str, chave: str) -> str:
         letras_decifradas.append(pa)
         letras_decifradas.append(pb)
 
+    # Número ímpar de letras: a última não tem par, e Playfair não sabe
+    # decifrar meia dupla. Passa adiante como veio -- o resultado fica
+    # errado, o que é honesto, em vez de faltar uma letra no iterador
+    # abaixo e estourar StopIteration.
+    if len(letras_cifradas) % 2:
+        letras_decifradas.append(letras_cifradas[-1])
+
     resultado = []
     it = iter(letras_decifradas)
-    for c in texto:
-        resultado.append(next(it) if c.isalpha() else c)
+    for c in texto_normalizado:
+        resultado.append(next(it) if _eh_letra_da_matriz(c) else c)
 
     return "".join(_remover_x_de_preenchimento(resultado))

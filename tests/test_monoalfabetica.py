@@ -97,8 +97,38 @@ def teste_cifra_e_decifra_sao_inversas_para_todo_alfabeto():
     )
 
 
+def teste_chave_acentuada_nao_vaza_para_a_cifra():
+    """Regressão: validar_chave() normaliza a chave antes de validar, então
+    'Ñ' é aceito no lugar de 'N'. Se cifrar() usasse a chave CRUA, a letra
+    mapeada para 'Ñ' produziria uma cifra não-ASCII, impossível de
+    transmitir -- e o usuário só descobriria ao tentar mandar a mensagem.
+    Chave e texto precisam sofrer a MESMA normalização."""
+    chave_acentuada = "QWERTYUIOPASDFGHJKLZXCVBÑM"
+
+    valido, _ = monoalfabetica.validar_chave(chave_acentuada)
+    assert valido is True, "chave acentuada deveria ser aceita apos normalizacao"
+
+    # 'Y' e a letra mapeada para a posicao onde esta o 'Ñ'
+    cifrado = monoalfabetica.cifrar("YAYA COM ESTILO", chave_acentuada)
+    assert cifrado.isascii(), (
+        f"cifrar() com chave acentuada gerou saida nao-ASCII: {cifrado!r}"
+    )
+
+    assert monoalfabetica.decifrar(cifrado, chave_acentuada) == "YAYA COM ESTILO", (
+        "a chave acentuada deve decifrar igual a sua versao sem acento"
+    )
+
+
+def teste_chave_acentuada_equivale_a_chave_sem_acento():
+    acentuada = "QWERTYUIOPASDFGHJKLZXCVBÑM"
+    limpa = "QWERTYUIOPASDFGHJKLZXCVBNM"
+    assert monoalfabetica.cifrar("ATAQUE", acentuada) == monoalfabetica.cifrar("ATAQUE", limpa)
+
+
 def rodar_todos():
     testes = [
+        teste_chave_acentuada_nao_vaza_para_a_cifra,
+        teste_chave_acentuada_equivale_a_chave_sem_acento,
         teste_validar_chave_aceita_permutacao_valida,
         teste_validar_chave_rejeita_tamanho_errado,
         teste_validar_chave_rejeita_letras_repetidas,

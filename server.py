@@ -102,9 +102,13 @@ def remover_cliente(client, avisar=True, motivo="saiu do chat"):
         SE a saída foi por /sair, erro de rede, ou outro motivo técnico --
         só que alguém saiu.
     """
+    endereco = None
     with lock:
         if client in clients:
-            index = clients.index(client)
+            try:
+                endereco = client.getpeername()
+            except OSError:
+                endereco = None
             clients.remove(client)
             endereco = enderecos.pop(index)
         else:

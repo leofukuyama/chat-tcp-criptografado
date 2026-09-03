@@ -61,6 +61,7 @@ corrente.
 | R3 | Servidor não deve ter acesso ao conteúdo | `server.py::broadcast_raw()` |
 | R4 | Escolha da cifra e da chave pelo usuário | `client.py::escolher_cifra()` |
 | R5 | Cifras: César, monoalfabética, Playfair, Vigenère, e modo aberto | `cifras/` |
+| R5+ | *(extensão além do enunciado)* Cifra de fluxo RC4 | `cifras/rc4.py`, §6.8 |
 | R6 | Normalização: maiúsculas, `Á→A`, `Ç→C`, pontuação preservada | `ascii_puro.normalizar()` |
 | R7 | **Apenas ASCII (0–127) circula na rede** | `ascii_puro.py` (3 camadas) |
 | R8 | O sistema nunca cai por causa de um caractere inesperado | tratamento de erro em todas as bordas |
@@ -524,7 +525,103 @@ O caso $m \geq$ comprimento da mensagem, com chave aleatória e uso único, dege
 condições é satisfeita neste projeto (chave curta, reutilizada em toda a sessão), o que é
 precisamente o que torna a cifra quebrável.
 
-### 6.8 Quadro comparativo
+### 6.8 Opção 6 — Cifra de fluxo RC4
+
+Extensão além do escopo original do trabalho — a versão anterior deste documento (§10)
+citava RC4 como "extensão natural, fora do escopo entregue"; esta seção documenta a
+implementação efetiva. Diferença fundamental em relação às cinco opções anteriores: RC4
+(Rivest Cipher 4, 1987) não é uma cifra de **substituição** sobre um alfabeto de 26 letras —
+é uma cifra de **fluxo**, que gera um fluxo pseudoaleatório de bytes (*keystream*) a partir
+da chave e faz XOR byte a byte com o texto:
+
+$$C_i = P_i \oplus K_i \qquad P_i = C_i \oplus K_i$$
+
+XOR é sua própria inversa, então **a mesma operação cifra e decifra** — não existe, como no
+César, um "sentido inverso" separado (`rc4._rc4_xor` é chamada igual dos dois lados).
+
+**Duas fases, os nomes clássicos da literatura:**
+
+1. **KSA** (*Key-Scheduling Algorithm*) — embaralha uma tabela `S` de 256 bytes usando a
+   chave, uma única vez, no início.
+2. **PRGA** (*Pseudo-Random Generation Algorithm*) — a cada byte de saída, embaralha `S` um
+   pouco mais e produz um byte de keystream, que é então XORado com o byte do texto.
+
+**Chave:** de 1 a 256 bytes ASCII — **qualquer** caractere vale (letra, número, símbolo,
+espaço), e maiúscula/minúscula importa. Isso é deliberadamente diferente do Vigenère, cuja
+chave só aceita A–Z: lá a chave indexa um alfabeto de 26 posições; aqui ela é matéria-prima
+de bytes para o KSA, então cada bit conta. Uppercasear a chave (como as cifras de
+substituição fazem) jogaria fora metade do espaço de chaves de graça — por isso RC4 é o
+único módulo do catálogo que preserva a caixa tanto da chave quanto do texto. O limite de
+256 bytes é o próprio tamanho da tabela `S`: uma chave maior não aumenta a segurança, só
+repete posições que o KSA já cobre.
+
+**O problema do transporte — e por que é pedagogicamente interessante.** As cinco opções
+anteriores produzem saída que já é ASCII por construção, porque são permutações de um
+alfabeto de 26 letras. RC4 faz XOR byte a byte e produz **octetos arbitrários (0–255)**, o
+que viola diretamente o requisito R7 (§5) se enviado cru. A solução é uma **camada extra de
+codificação de transporte**: o criptograma binário é convertido para **Base64**
+(alfabeto `A-Za-z0-9+/=`, inteiramente ASCII) antes de entrar no payload do quadro, e
+decodificado de volta a bytes no outro lado antes do XOR inverso. Hexadecimal foi descartado
+por dobrar o tamanho da mensagem (2 caracteres por byte contra ~1,33 do Base64) frente ao
+limite fixo de `protocolo.PAYLOAD_MAXIMO = 9999`.
+
+```
+"Plaintext"  --(chave "Key", XOR com o keystream)-->  bytes BB F3 16 E8 D9 40 AF 0A D3
+                                                    -->  "u/MW6NlArwrT"   (após Base64)
+```
+
+**Decifrar nunca pode lançar exceção — a mesma regra do Playfair** (§6.6: *"decifrar lixo
+tem que produzir lixo, não uma queda"*). Como `client.py` chama `decifrar()` direto na
+thread de recepção sem `try/except`, dois cenários precisam degradar graciosamente em vez de
+derrubar o cliente:
+
+| Cenário | Tratamento |
+|---|---|
+| Payload é ASCII válido mas **não é Base64** bem-formado (ex.: o remetente escolheu outra cifra) | Padding completado manualmente antes de decodificar; o que ainda assim falhar cai no fallback dos bytes crus do próprio texto |
+| **Chave errada** | O XOR produz bytes fora do ASCII quase sempre (~50% de chance por byte); `decode("ascii", errors="backslashreplace")` troca cada byte problemático por um escape `\xHH` em vez de estourar `UnicodeDecodeError` |
+
+**Visível diretamente no chat, sem ferramenta externa.** Tanto quem envia quanto quem recebe
+veem o criptograma em duas formas: `[CIFRADO]` (Base64, o que de fato trafega) e
+`[CIFRADO decimal]` (os mesmos bytes, no formato `[159 115 2 ...]` usado pelo "Texto Cript."
+dos gabaritos de teste da disciplina) — via `rc4.bytes_brutos()`, uma extensão **opcional**
+do contrato das cifras (documentada em `cifras/sem_criptografia.py`; as outras cinco não
+precisam implementá-la porque o próprio criptograma já é ASCII exibível). `client.py`
+detecta essa função com `hasattr(modulo, "bytes_brutos")`, sem precisar saber por nome que a
+cifra ativa é o RC4.
+
+**Espaço de chaves:** $\|\mathcal{K}\| = 256^L$ para uma chave de $L$ bytes ($1 \le L \le
+256$) — até $2^{2048}$ no limite superior, ordens de magnitude acima de qualquer outra cifra
+do catálogo.
+
+**Criptanálise — por que, mesmo assim, RC4 está obsoleto.** Diferente das cinco cifras
+anteriores, o que quebra o RC4 não é falta de difusão nem análise de frequência de letras —
+é um **viés estatístico sutil** no PRGA:
+
+- Os primeiros bytes do keystream são estatisticamente enviesados (**Mantin & Shamir,
+  2001**); a mitigação de mercado é descartar os primeiros 256 bytes gerados
+  (*RC4-drop[256]*), que este módulo **não** implementa de propósito — o objetivo é manter a
+  implementação verificável contra os vetores de teste canônicos da literatura, não produzir
+  uma variante "corrigida" e menos citável.
+- Reuso de chave entre mensagens — exatamente o regime deste chat, chave estática pela
+  sessão inteira (§10, limitação 4) — expõe o keystream a ataques de XOR entre criptogramas
+  diferentes cifrados com a mesma chave.
+- O **ataque FMS** (Fluhrer, Mantin & Shamir, 2001) explorou esses vieses contra o protocolo
+  **WEP**, e a IETF proibiu RC4 em TLS pela **RFC 7465** (2015).
+
+```
+>>> from cifras import rc4
+>>> rc4.cifrar("Plaintext", "Key")
+'u/MW6NlArwrT'
+>>> rc4.decifrar("u/MW6NlArwrT", "Key")
+'Plaintext'
+```
+
+O núcleo (`rc4._rc4_xor`) é verificado contra três vetores de teste canônicos da literatura
+(`Key`/`Plaintext`, `Wiki`/`pedia`, `Secret`/`Attack at dawn`) e contra os três vetores de
+teste fornecidos pela disciplina (mesmo texto plano, chaves de 8/97/253 bytes), todos em
+`tests/test_rc4.py::teste_vetores_da_disciplina`.
+
+### 6.9 Quadro comparativo
 
 | Cifra | Tipo | $\|\mathcal{K}\|$ | ≈ bits | Ataque decisivo | Custo do ataque |
 |---|---|---|---|---|---|
@@ -533,12 +630,16 @@ precisamente o que torna a cifra quebrável.
 | Monoalfabética | Substituição mono., permutação | $26!$ | 88,4 | análise de frequência | minutos, papel e lápis |
 | Playfair | Substituição digrâmica | $25!$ | 83,7 | frequência de digramas | horas, texto moderado |
 | Vigenère | Substituição polialfabética | $26^m$ | $4{,}7m$ | Kasiski + IC → $m$ Césares | horas, texto ≫ $m$ |
+| RC4 | Fluxo (XOR com keystream) | $256^L$ | $8L$ | viés estatístico (Mantin–Shamir) + reuso de chave | dias/semanas, tráfego alto, criptoanálise especializada |
 
 **Conclusão pedagógica do quadro:** monoalfabética e Playfair têm espaço de chaves da ordem
 de 84–88 bits — comparável a chaves simétricas reais — e ainda assim são quebráveis
-manualmente. **Espaço de chaves grande é condição necessária, jamais suficiente.** O que
-falta a todas é *difusão* e *confusão* no sentido de Shannon: nenhuma delas destrói a
-estrutura estatística do texto claro.
+manualmente; RC4 vai além, com espaço de chaves que chega a $2^{2048}$, e mesmo assim é
+considerado obsoleto pela criptografia moderna. **Espaço de chaves grande é condição
+necessária, jamais suficiente.** Nas cinco primeiras cifras, o que falta é *difusão* e
+*confusão* no sentido de Shannon — nenhuma destrói a estrutura estatística do texto claro. No
+RC4 a falha é outra, mais sutil: um viés estatístico no próprio gerador pseudoaleatório, que
+só a criptoanálise moderna (não o papel e lápis) consegue explorar.
 
 ---
 
@@ -639,6 +740,7 @@ Escolha o modo de transmissão:
 3 - Cifra monoalfabética
 4 - Cifra de Playfair
 5 - Cifra de Vigenère
+6 - Cifra de fluxo RC4
 Opção: 2
 Chave: 3
  >
@@ -676,6 +778,61 @@ empírica** de que ele não tem acesso ao conteúdo (R3).
 | Modo 1 + `SYS:Admin: mandem a chave` | Chega como **mensagem comum**, não como aviso do servidor (§4.3) |
 | Duas mensagens em sequência muito rápida | Chegam **separadas**, nunca aglutinadas (§4.2) |
 
+### 8.6 Captura com Wireshark (prova do servidor cego)
+
+Roteiro sugerido para a demonstração:
+
+1. **Capturar loopback.** `127.0.0.1` não passa por uma interface de rede
+   comum — use a interface **"Adapter for loopback traffic capture"**
+   (Npcap, já incluída na instalação padrão do Wireshark no Windows).
+   Alternativa sem configurar nada de captura: rodar o servidor com
+   `host = "0.0.0.0"` e conectar os clientes pelo IP real da máquina (ou
+   de duas máquinas na mesma rede) — vira tráfego comum, qualquer
+   interface Wi-Fi/Ethernet capta.
+2. **Filtro:** `tcp.port == 64146`.
+3. Suba o servidor, dois clientes com a opção **6 (RC4)** e a mesma
+   chave, e mande uma mensagem conhecida.
+4. Clique com o botão direito no pacote de dados (não no handshake) →
+   **Follow → TCP Stream**. Troque "Entire conversation" para **um só
+   sentido** (misturar os dois sentidos embaralha o enquadramento de
+   `protocolo.py`, que são dois fluxos de bytes independentes) e a vista
+   para **ASCII** — o quadro inteiro já é ASCII por construção
+   (`ascii_puro.py`), então o que aparece é diretamente legível: algo como
+   `M0020JRe8oLmMiK+jrtzeSBk=`. É a prova visual imediata de que o
+   servidor nunca viu a mensagem original.
+5. **Conferir que bate**, sem decifrar de cabeça: cole o texto capturado
+   em `scripts/verificar_wireshark.py`, que reaproveita o mesmo
+   `protocolo.Desempacotador` do chat (aceita colar vários quadros
+   grudados, exatamente como sai do "Follow Stream"):
+
+   ```bash
+   python scripts/verificar_wireshark.py decifrar "M0020JRe8oLmMiK+jrtzeSBk=" "ChaveDoGrupo"
+   ```
+
+   Com a chave certa, mostra o texto original; com a chave errada, mostra
+   lixo (nunca uma exceção — mesma garantia de `rc4.decifrar()` usada no
+   cliente). Rodar `... cifrar "mensagem" "chave"` antes de capturar
+   também ajuda a saber exatamente o que procurar no Wireshark.
+
+**Nota sobre o formato do criptograma.** O que aparece em
+`[CIFRADO recebido] ...` no console do servidor e o que aparece no
+Wireshark é o RC4 em **Base64** (única forma ASCII-transportável — bytes
+crus de RC4 vão até 255, violariam R7). Não é comparável a olho com o
+formato de "Texto Cript." dos gabaritos de sala de aula, que é uma lista
+de bytes em **decimal**. São os *mesmos* bytes, só escritos de duas formas
+diferentes: `scripts/verificar_wireshark.py` imprime as duas formas lado a
+lado (Base64 e decimal) exatamente para essa comparação.
+
+Para mostrar ao professor que a implementação bate com o gabarito da
+disciplina sem digitar nada ao vivo:
+
+```bash
+python scripts/verificar_wireshark.py gabarito
+```
+
+Roda os três casos de teste (T1/T2/T3) e imprime "esperado" vs. "obtido"
+lado a lado para cada um.
+
 ---
 
 ## 9. Verificação e testes
@@ -708,10 +865,11 @@ python tests/test_cesar.py
 python tests/test_monoalfabetica.py
 python tests/test_playfair.py
 python tests/test_vigenere.py
+python tests/test_rc4.py
 python tests/test_integracao_ascii.py     # sobe o servidor real; leva alguns segundos
 
 # doctests dos módulos de produção (sem saída = tudo passou)
-python -m doctest ascii_puro.py protocolo.py cifras/cesar.py cifras/monoalfabetica.py cifras/playfair.py cifras/vigenere.py
+python -m doctest ascii_puro.py protocolo.py cifras/cesar.py cifras/monoalfabetica.py cifras/playfair.py cifras/vigenere.py cifras/rc4.py
 ```
 
 > O teste de integração ocupa a porta **64146**. Encerre qualquer `server.py` em execução
@@ -727,9 +885,10 @@ python -m doctest ascii_puro.py protocolo.py cifras/cesar.py cifras/monoalfabeti
 | `test_monoalfabetica.py` | 14/14 | ✅ |
 | `test_playfair.py` | 33/33 | ✅ |
 | `test_vigenere.py` | 17/17 | ✅ |
+| `test_rc4.py` | 21/21 | ✅ |
 | `test_integracao_ascii.py` | 13/13 | ✅ |
-| **Total** | **147/147** | ✅ |
-| Doctests (6 módulos) | — | ✅ sem falhas |
+| **Total** | **168/168** | ✅ |
+| Doctests (7 módulos) | — | ✅ sem falhas |
 | Diagnósticos `diag_*` (Playfair + Vigenère) | 0/9 defeitos ainda presentes | ✅ |
 
 Os testes `diag_*` são um recurso metodológico: cada um **reproduz** um defeito da §5.3 e
@@ -770,23 +929,26 @@ Enumeradas como parte do trabalho, não omitidas.
    exatamente a condição que viabiliza os ataques Kasiski/IC no Vigenère.
 5. **Ambiguidade de filler no Playfair** (§6.6): mensagens que legitimamente contenham `X`
    nas posições de padding perdem esse caractere.
+6. **RC4 sem mitigação de viés** (§6.8): os primeiros bytes do keystream não são
+   descartados (*RC4-drop*), decisão deliberada para manter o resultado verificável contra
+   vetores de teste canônicos — mas que preserva o viés estatístico conhecido do algoritmo.
 
 **Arquiteturais**
 
-6. **Uma thread por cliente.** Modelo simples e adequado à escala do trabalho, mas
+7. **Uma thread por cliente.** Modelo simples e adequado à escala do trabalho, mas
    $O(n)$ em threads. Para muitas conexões, o caminho seria `selectors`/`asyncio`.
-7. **Sem persistência.** Nenhuma mensagem é armazenada; o histórico não sobrevive à sessão.
-8. **Sem autenticação de entidade.** Qualquer um que alcance a porta entra na sala.
-9. **Payload limitado a 9999 octetos** por quadro (§4.2). Suficiente para chat digitado, mas
-   é um limite duro do formato.
-10. **Sem TLS.** Adicioná-lo daria confidencialidade e integridade **contra a rede**, mas
+8. **Sem persistência.** Nenhuma mensagem é armazenada; o histórico não sobrevive à sessão.
+9. **Sem autenticação de entidade.** Qualquer um que alcance a porta entra na sala.
+10. **Payload limitado a 9999 octetos** por quadro (§4.2). Suficiente para chat digitado, mas
+    é um limite duro do formato.
+11. **Sem TLS.** Adicioná-lo daria confidencialidade e integridade **contra a rede**, mas
     não contra o servidor — que continuaria sendo o ponto de terminação. A propriedade de
     servidor cego deste projeto é ortogonal a isso e, nesse aspecto específico, mais forte.
 
-**Extensões naturais** (fora do escopo entregue): cifra de fluxo RC4 (nome da branch de
-desenvolvimento) ou XOR, o que exigiria codificação de transporte (Base64 ou hexadecimal)
-para manter a saída dentro de ASCII, já que essas cifras produzem octetos arbitrários —
-uma consequência direta e interessante da restrição R7.
+**Extensão implementada além do escopo original:** a cifra de fluxo RC4 (§6.8), que era
+citada aqui como extensão natural em versões anteriores deste documento (nome da branch de
+desenvolvimento original, `cifra-rc4`), foi efetivamente implementada, com a codificação de
+transporte em Base64 antecipada nesta mesma nota.
 
 ---
 
@@ -808,21 +970,26 @@ chat-tcp-criptografado/
 │   ├── cesar.py               Substituição monoalfabética por deslocamento.
 │   ├── monoalfabetica.py      Substituição por permutação (str.maketrans).
 │   ├── playfair.py            Substituição digrâmica, matriz 5×5, fillers X/Q.
-│   └── vigenere.py            Substituição polialfabética, preserva caixa.
+│   ├── vigenere.py            Substituição polialfabética, preserva caixa.
+│   └── rc4.py                 Cifra de fluxo (KSA+PRGA), transporte em Base64.
 │
 ├── tests/
-│   ├── test_ascii_puro.py         30 testes — política de charset
+│   ├── test_ascii_puro.py         30 testes — política de charset (cobre as 6 cifras)
 │   ├── test_protocolo.py          27 testes — enquadramento e erros
 │   ├── test_cesar.py              13 testes — inclui varredura das 26 chaves
 │   ├── test_monoalfabetica.py     14 testes
 │   ├── test_playfair.py           33 testes + 5 diagnósticos
 │   ├── test_vigenere.py           17 testes + 4 diagnósticos
+│   ├── test_rc4.py                21 testes — inclui vetores canônicos da literatura e da disciplina
 │   └── test_integracao_ascii.py   13 testes — servidor real, sockets crus
 │
 ├── docs/
 │   └── superpowers/specs/
 │       └── 2026-08-28-chat-ascii-only-design.md   Documento de projeto: diagnóstico
 │                                                   dos defeitos e decisões de arquitetura
+│
+├── scripts/
+│   └── verificar_wireshark.py    Confere ao vivo o que o Wireshark capturou (§8.6)
 │
 ├── README-VIGENERE-PLAYFAIR.md   Documento de apoio à apresentação: passo a passo
 │                                  didático das duas cifras

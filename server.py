@@ -105,12 +105,12 @@ def remover_cliente(client, avisar=True, motivo="saiu do chat"):
     endereco = None
     with lock:
         if client in clients:
-            try:
-                endereco = client.getpeername()
-            except OSError:
-                endereco = None
+            # As duas listas são paralelas (mesmo índice): captura o índice
+            # ANTES de remover, senão não há como saber qual endereço
+            # corresponde a este client depois que ele já saiu de clients.
+            indice = clients.index(client)
             clients.remove(client)
-            endereco = enderecos.pop(index)
+            endereco = enderecos.pop(indice)
         else:
             endereco = None
 

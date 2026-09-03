@@ -305,6 +305,7 @@ CHAVES_POR_OPCAO = {
     "3": ["QWERTYUIOPASDFGHJKLZXCVBNM", "QWERTYUIOPASDFGHJKLZXCVBÑM"],
     "4": ["SEGURANCA", "SEGURANÇA", "chave com espaço"],
     "5": ["CHAVE", "CHÁVE", "cháve"],
+    "6": ["Key", "s3nh@ com espaco e #simbolo", "chave acentuada é válida"],
 }
 
 TEXTOS = [

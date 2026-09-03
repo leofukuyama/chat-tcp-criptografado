@@ -121,6 +121,16 @@ def mostrar_quadro(quadro, modulo, chave):
     # Conteúdo de chat real: só aqui decifra de fato.
     texto_claro = modulo.decifrar(quadro.texto, chave)
     print(f"\r[CIFRADO]   {quadro.texto}")
+
+    # Extensão OPCIONAL do contrato das cifras (cifras/sem_criptografia.py):
+    # só o RC4 tem um criptograma que não é ASCII "de fábrica" -- por isso
+    # trafega em Base64 -- e expõe bytes_brutos() para mostrar os mesmos
+    # bytes no formato decimal usado nos gabaritos de teste da disciplina.
+    # As outras cifras não têm essa função porque o texto já cifrado ali
+    # em cima já é a própria informação, sem camada extra.
+    if hasattr(modulo, "bytes_brutos"):
+        print(f"[CIFRADO decimal] {list(modulo.bytes_brutos(quadro.texto))}")
+
     print(f"[DECIFRADO] {texto_claro}\n > ", end="", flush=True)
     return True
 
@@ -232,6 +242,12 @@ def write(modulo, chave):
             continue
 
         cifrado = modulo.cifrar(texto_claro, chave)
+        print(f"   [CIFRADO]   {cifrado}")
+        if hasattr(modulo, "bytes_brutos"):
+            # Mesma extensão opcional usada em mostrar_quadro(): mostra o
+            # que acabou de ser enviado no formato decimal dos gabaritos
+            # de teste, sem precisar esperar o outro cliente responder.
+            print(f"   [CIFRADO decimal] {list(modulo.bytes_brutos(cifrado))}")
 
         # empacotar() aplica a CAMADA 2 (errors="strict") e valida o
         # tamanho. Mesmo que a camada 1 falhasse, é impossível um byte

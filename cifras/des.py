@@ -288,3 +288,135 @@ def _decifrar_bloco(bloco: bytes, subchaves: list[list[int]]) -> bytes:
 
     pre_saida = direita + esquerda
     return _bits_para_bytes(_permutar(pre_saida, IP_INV))
+
+
+# ============================================================
+# CONTRATO DO CHAT (ASCII na entrada, Base64 na saida)
+# ============================================================
+
+def validar_chave(chave: str) -> tuple[bool, str]:
+    """
+    Regras: nao vazia, ASCII puro apos normalizar acento, no maximo
+    TAMANHO_BLOCO (8) caracteres -- o DES usa chave de 64 bits e uma
+    senha maior nao caberia sem truncar em silencio.
+
+    >>> validar_chave("Senha123")
+    (True, '')
+    >>> validar_chave("")
+    (False, 'A chave não pode ser vazia.')
+    """
+    chave_normalizada = ascii_puro.normalizar(chave)
+
+    if not chave_normalizada:
+        return False, "A chave não pode ser vazia."
+
+    valida, erro = ascii_puro.validar(chave_normalizada)
+    if not valida:
+        return False, f"A chave deve conter apenas caracteres ASCII ({erro})."
+
+    if len(chave_normalizada) > TAMANHO_BLOCO:
+        return False, f"A chave deve ter no máximo {TAMANHO_BLOCO} caracteres."
+
+    return True, ""
+
+
+def _preparar_chave(chave: str) -> bytes:
+    """
+    Valida e converte a chave para exatamente 8 bytes, completando com
+    zeros a direita se for mais curta -- mesmo principio de padding
+    autorizado pelo professor para o texto, aplicado aqui a chave.
+
+    >>> _preparar_chave("ab")
+    b'ab\\x00\\x00\\x00\\x00\\x00\\x00'
+    """
+    chave_normalizada = ascii_puro.normalizar(chave)
+
+    if not chave_normalizada:
+        raise ValueError("A chave não pode ser vazia.")
+
+    # Truncate to 8 characters (silently, para robustez em decifrar)
+    chave_normalizada = chave_normalizada[:TAMANHO_BLOCO]
+
+    chave_bytes = chave_normalizada.encode("ascii", errors="ignore")
+    return chave_bytes.ljust(TAMANHO_BLOCO, b"\x00")
+
+
+def _dividir_em_blocos(dados: bytes) -> list[bytes]:
+    """Divide em blocos de TAMANHO_BLOCO bytes, completando o ultimo com
+    zeros se necessario (padding simples, autorizado pelo professor)."""
+    resto = len(dados) % TAMANHO_BLOCO
+    if resto != 0:
+        dados = dados + b"\x00" * (TAMANHO_BLOCO - resto)
+    return [dados[i:i + TAMANHO_BLOCO] for i in range(0, len(dados), TAMANHO_BLOCO)]
+
+
+def cifrar(texto: str, chave: str) -> str:
+    """
+    Cifra um texto usando DES em modo ECB (cada bloco de 8 bytes cifrado
+    independentemente com as mesmas subchaves) e devolve o criptograma em
+    Base64 -- o criptograma bruto tem bytes 0-255, incompatível com a
+    regra ASCII-only da rede deste projeto (mesmo motivo do RC4).
+
+    >>> cifrar("", "Senha123")
+    ''
+    """
+    chave_bytes = _preparar_chave(chave)
+    texto_normalizado = ascii_puro.normalizar(texto)
+    dados = ascii_puro.codificar(texto_normalizado)
+
+    if not dados:
+        return ""
+
+    subchaves = _gerar_subchaves(chave_bytes)
+    blocos = _dividir_em_blocos(dados)
+    cifrado = b"".join(_cifrar_bloco(bloco, subchaves) for bloco in blocos)
+    return base64.b64encode(cifrado).decode("ascii")
+
+
+def _base64_decode_tolerante(texto: str) -> bytes:
+    """
+    Decodifica Base64 sem nunca lancar excecao -- mesma logica de
+    rc4._base64_decode_tolerante, duplicada aqui para manter cada modulo
+    de cifra autocontido (o padrao do projeto e' nao importar entre
+    modulos irmaos, so de ascii_puro).
+    """
+    texto_ascii = texto.encode("ascii", errors="ignore").decode("ascii")
+    texto_com_padding = texto_ascii + "=" * (-len(texto_ascii) % 4)
+    try:
+        return base64.b64decode(texto_com_padding, validate=False)
+    except binascii.Error:
+        return texto_ascii.encode("ascii", errors="ignore")
+
+
+def bytes_brutos(texto_cifrado: str) -> bytes:
+    """
+    Extensao OPCIONAL do contrato das cifras (ver cifras/rc4.py): expoe o
+    criptograma decodificado do Base64 para client.py exibir
+    "[CIFRADO decimal]", igual ao que ja acontece com o RC4.
+    """
+    return _base64_decode_tolerante(texto_cifrado)
+
+
+def decifrar(texto: str, chave: str) -> str:
+    """
+    Decifra um criptograma em Base64 de volta ao texto original. Nunca
+    lanca excecao (client.py chama isso direto na thread de recepcao,
+    sem try/except): Base64 invalido produz poucos ou nenhum bloco
+    completo, e chave errada produz bytes que decodificam como lixo via
+    errors="backslashreplace" -- igual ao rc4.decifrar().
+
+    >>> decifrar(cifrar("Ola mundo!", "Senha123"), "Senha123")
+    'Ola mundo!'
+    """
+    chave_bytes = _preparar_chave(chave)
+    subchaves = _gerar_subchaves(chave_bytes)
+    dados = _base64_decode_tolerante(texto)
+
+    n_blocos_completos = len(dados) // TAMANHO_BLOCO
+    decifrado = bytearray()
+    for indice in range(n_blocos_completos):
+        bloco = dados[indice * TAMANHO_BLOCO:(indice + 1) * TAMANHO_BLOCO]
+        decifrado.extend(_decifrar_bloco(bloco, subchaves))
+
+    sem_padding = bytes(decifrado).rstrip(b"\x00")
+    return sem_padding.decode("ascii", errors="backslashreplace")

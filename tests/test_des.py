@@ -3,7 +3,9 @@ Testes isolados da Cifra DES -- sem envolver rede, socket ou o chat.
 Rodar com: python tests/test_des.py  (a partir da raiz do projeto)
 """
 
+import base64
 import os
+import re
 import sys
 
 # Garante que o pacote cifras/ seja encontrado mesmo rodando este arquivo
@@ -192,6 +194,111 @@ def teste_mensagem_completa_exemplo_pdf():
     assert decifrado == texto_com_padding
 
 
+CHAVE_EXEMPLO = "Senha123"  # 8 caracteres ASCII -- cabe exato em 64 bits
+REGEX_BASE64 = re.compile(r"^[A-Za-z0-9+/]*={0,2}$")
+
+
+def teste_validar_chave_aceita_ate_8_caracteres():
+    valido, erro = des.validar_chave("Senha123")
+    assert valido is True, f"Chave de 8 caracteres foi rejeitada: {erro}"
+
+
+def teste_validar_chave_aceita_curta():
+    valido, erro = des.validar_chave("ab")
+    assert valido is True, f"Chave curta deveria ser aceita (padding): {erro}"
+
+
+def teste_validar_chave_rejeita_vazia():
+    valido, erro = des.validar_chave("")
+    assert valido is False
+    assert erro == "A chave não pode ser vazia."
+
+
+def teste_validar_chave_rejeita_acima_de_8():
+    valido, erro = des.validar_chave("123456789")
+    assert valido is False, "Chave de 9 caracteres deveria ser rejeitada"
+
+
+def teste_validar_chave_rejeita_nao_ascii():
+    valido, erro = des.validar_chave("emoji😀")
+    assert valido is False
+
+
+def teste_validar_chave_normaliza_acento():
+    valido, erro = des.validar_chave("café12")
+    assert valido is True, f"Chave acentuada deveria ser aceita apos normalizacao: {erro}"
+
+
+def teste_preparar_chave_completa_com_zeros():
+    assert des._preparar_chave("ab") == b"ab\x00\x00\x00\x00\x00\x00"
+    assert des._preparar_chave("12345678") == b"12345678"
+
+
+def teste_cifrar_produz_base64_valido():
+    resultado = des.cifrar("Ola mundo!", CHAVE_EXEMPLO)
+    assert REGEX_BASE64.match(resultado), (
+        f"Saida de cifrar() deveria ser Base64 puro, obtido {resultado!r}"
+    )
+
+
+def teste_ida_e_volta_round_trip():
+    for frase in ["Ola mundo!", "a", "Teste, 1 2 3.", "Mensagem maior que um bloco de oito bytes"]:
+        cifrado = des.cifrar(frase, CHAVE_EXEMPLO)
+        decifrado = des.decifrar(cifrado, CHAVE_EXEMPLO)
+        assert decifrado == frase, f"{frase!r} -> {cifrado!r} -> {decifrado!r}"
+
+
+def teste_ida_e_volta_com_chave_curta():
+    cifrado = des.cifrar("mensagem qualquer", "ab")
+    decifrado = des.decifrar(cifrado, "ab")
+    assert decifrado == "mensagem qualquer"
+
+
+def teste_texto_vazio_produz_criptograma_vazio():
+    assert des.cifrar("", CHAVE_EXEMPLO) == ""
+    assert des.decifrar("", CHAVE_EXEMPLO) == ""
+
+
+def teste_chave_errada_nao_recupera_o_texto():
+    cifrado = des.cifrar("MENSAGEM SECRETA", CHAVE_EXEMPLO)
+    resultado = des.decifrar(cifrado, "outrachave")
+    assert resultado != "MENSAGEM SECRETA"
+
+
+def teste_decifrar_com_chave_errada_nao_derruba_o_cliente():
+    cifrado = des.cifrar("Ola, tudo bem?", CHAVE_EXEMPLO)
+    try:
+        resultado = des.decifrar(cifrado, "chave totalmente diferente")
+    except Exception as e:
+        assert False, f"decifrar() com chave errada nao deveria lancar excecao: {e}"
+    assert isinstance(resultado, str)
+
+
+def teste_decifrar_lixo_nao_derruba_o_cliente():
+    for entrada in ["não é base64!!!", "===", "!!!", "OLA MUNDO"]:
+        try:
+            resultado = des.decifrar(entrada, CHAVE_EXEMPLO)
+        except Exception as e:
+            assert False, f"decifrar({entrada!r}) nao deveria lancar excecao: {e}"
+        assert isinstance(resultado, str)
+
+
+def teste_bytes_brutos_bate_com_cifrar():
+    cifrado_base64 = des.cifrar("Ola, tudo bem?", CHAVE_EXEMPLO)
+    esperado = base64.b64decode(cifrado_base64)
+    obtido = des.bytes_brutos(cifrado_base64)
+    assert obtido == esperado
+
+
+def teste_cifrar_com_chave_vazia_estoura_valueerror_claro():
+    try:
+        des.cifrar("mensagem", "")
+    except ValueError as e:
+        assert "vazia" in str(e).lower(), f"erro pouco claro para chave vazia: {e}"
+    else:
+        assert False, "cifrar() aceitou chave vazia em silencio"
+
+
 TESTES = [
     teste_bytes_para_bits_e_volta,
     teste_permutar_tabela_simples,
@@ -205,6 +312,22 @@ TESTES = [
     teste_bloco_vetor_classico_livro_texto,
     teste_bloco_exemplo_atacar_base_norte,
     teste_mensagem_completa_exemplo_pdf,
+    teste_validar_chave_aceita_ate_8_caracteres,
+    teste_validar_chave_aceita_curta,
+    teste_validar_chave_rejeita_vazia,
+    teste_validar_chave_rejeita_acima_de_8,
+    teste_validar_chave_rejeita_nao_ascii,
+    teste_validar_chave_normaliza_acento,
+    teste_preparar_chave_completa_com_zeros,
+    teste_cifrar_produz_base64_valido,
+    teste_ida_e_volta_round_trip,
+    teste_ida_e_volta_com_chave_curta,
+    teste_texto_vazio_produz_criptograma_vazio,
+    teste_chave_errada_nao_recupera_o_texto,
+    teste_decifrar_com_chave_errada_nao_derruba_o_cliente,
+    teste_decifrar_lixo_nao_derruba_o_cliente,
+    teste_bytes_brutos_bate_com_cifrar,
+    teste_cifrar_com_chave_vazia_estoura_valueerror_claro,
 ]
 
 

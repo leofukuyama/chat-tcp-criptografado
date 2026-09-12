@@ -59,10 +59,12 @@ disciplina, padrão FIPS 46-3): `IP`, `IP_INV`, `PC1`, `PC2`, `E_TABELA`,
   (cada uma 48 bits).
 - `_funcao_f(bits_r: list[int], subchave: list[int]) -> list[int]` — expansão E
   (32→48), XOR com a subchave, substituição pelas 8 S-BOX (48→32), permutação P.
-- `_cifrar_bloco(bloco: bytes, chave: bytes) -> bytes` — IP, 16 rodadas de
-  Feistel com `K1..K16`, troca de metades, IP⁻¹. Bloco e chave sempre 8 bytes.
-- `_decifrar_bloco(bloco: bytes, chave: bytes) -> bytes` — mesma estrutura,
-  subchaves aplicadas na ordem inversa (`K16..K1`).
+- `_cifrar_bloco(bloco: bytes, subchaves: list[list[int]]) -> bytes` — IP, 16
+  rodadas de Feistel com `K1..K16`, troca de metades, IP⁻¹. Bloco sempre 8
+  bytes; `subchaves` vem de `_gerar_subchaves()` (permite calcular o key
+  schedule uma única vez por mensagem, em vez de uma vez por bloco).
+- `_decifrar_bloco(bloco: bytes, subchaves: list[list[int]]) -> bytes` — mesma
+  estrutura, subchaves aplicadas na ordem inversa (`K16..K1`).
 
 **Contrato do chat:**
 - `validar_chave(chave: str) -> tuple[bool, str]` — normaliza (remove acento),

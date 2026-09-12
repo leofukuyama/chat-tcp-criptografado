@@ -23,7 +23,7 @@ Extensão OPCIONAL do contrato (só para exibição/depuração, não é exigida
     bytes_brutos(texto_cifrado: str) -> bytes
         Só faz sentido para cifras cujo criptograma não é ASCII "de
         fábrica" e por isso precisa de uma camada extra de codificação de
-        transporte (hoje, só cifras/rc4.py -- Base64). Devolve os bytes
+        transporte (hoje, cifras/rc4.py e cifras/des.py -- Base64). Devolve os bytes
         crus antes dessa codificação, para comparar com formatos externos
         (ex.: um gabarito de teste em decimal) ou mostrar no chat.
         Chamadores devem testar `hasattr(modulo, "bytes_brutos")` antes de

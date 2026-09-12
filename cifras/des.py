@@ -216,3 +216,38 @@ def _gerar_subchaves(chave_bytes: bytes) -> list[list[int]]:
         d = _deslocar_esquerda(d, deslocamento)
         subchaves.append(_permutar(c + d, PC2))
     return subchaves
+
+
+# ============================================================
+# FUNCAO DE FEISTEL (F)
+# ============================================================
+
+def _expandir(bits_r: list[int]) -> list[int]:
+    """Expande R de 32 para 48 bits (tabela E) -- alguns bits de borda de
+    cada grupo de 4 aparecem repetidos em dois grupos adjacentes, e' o
+    que permite fazer XOR com a subchave de 48 bits."""
+    return _permutar(bits_r, E_TABELA)
+
+
+def _substituir_sbox(bits48: list[int]) -> list[int]:
+    """Reduz 48 bits para 32 usando as 8 S-BOX: cada grupo de 6 bits vira
+    4 -- primeiro e ultimo bit do grupo formam a linha (0-3), os 4 bits
+    do meio formam a coluna (0-15)."""
+    saida = []
+    for indice_caixa in range(8):
+        grupo = bits48[indice_caixa * 6:(indice_caixa + 1) * 6]
+        linha = grupo[0] * 2 + grupo[5]
+        coluna = grupo[1] * 8 + grupo[2] * 4 + grupo[3] * 2 + grupo[4]
+        valor = S_BOXES[indice_caixa][linha][coluna]
+        saida.extend([(valor >> 3) & 1, (valor >> 2) & 1, (valor >> 1) & 1, valor & 1])
+    return saida
+
+
+def _funcao_f(bits_r: list[int], subchave: list[int]) -> list[int]:
+    """Funcao F de uma rodada de Feistel: expande R (32->48), XOR com a
+    subchave da rodada, substitui pelas 8 S-BOX (48->32) e permuta com a
+    tabela P. Devolve 32 bits."""
+    expandido = _expandir(bits_r)
+    resultado_xor = _xor(expandido, subchave)
+    saida_sbox = _substituir_sbox(resultado_xor)
+    return _permutar(saida_sbox, P_TABELA)

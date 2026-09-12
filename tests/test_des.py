@@ -91,6 +91,54 @@ def teste_subchaves_exemplo_atacar_base_norte():
     )
 
 
+def teste_expansao_e_sbox_exemplo_pdf():
+    # Rodada 1 do primeiro bloco de "Atacar base norte." (README-DES.md
+    # secao 7.4) -- valida E, XOR com a subchave, saida das 8 S-BOX e a
+    # permutacao P, um passo de cada vez.
+    r0 = _bits("0000 0000 1111 1110 0000 0000 1010 1000")
+    k1 = _bits("000010 110000 001001 100111 100110 110100 100110 100101")
+
+    expandido = des._expandir(r0)
+    assert expandido == _bits(
+        "000000 000001 011111 111100 000000 000001 010101 010000"
+    )
+
+    xor_resultado = des._xor(expandido, k1)
+    assert xor_resultado == _bits(
+        "000010 110001 010110 011011 100110 110101 110011 110101"
+    )
+
+    sbox_saida = des._substituir_sbox(xor_resultado)
+    assert sbox_saida == _bits("0100 1011 0111 1010 1011 0001 0101 1001")
+
+    f = des._funcao_f(r0, k1)
+    assert f == _bits("0110 1111 0101 1001 1110 1000 1100 0100")
+
+
+def teste_rodadas_1_a_3_exemplo_pdf():
+    # Reproduz manualmente as 3 primeiras rodadas de Feistel do primeiro
+    # bloco de "Atacar base norte." e compara L/R contra os slides.
+    chave = bytes.fromhex("0123456789ABCDEF")
+    subchaves = des._gerar_subchaves(chave)
+
+    l0 = _bits("1011 1111 0010 0010 0000 0010 0001 1101")
+    r0 = _bits("0000 0000 1111 1110 0000 0000 1010 1000")
+
+    f1 = des._funcao_f(r0, subchaves[0])
+    l1 = r0
+    r1 = des._xor(l0, f1)
+    assert r1 == _bits("1101 0000 0111 1011 1110 1010 1101 1001")
+
+    f2 = des._funcao_f(r1, subchaves[1])
+    l2 = r1
+    r2 = des._xor(l1, f2)
+    assert r2 == _bits("1101 0111 1100 1001 1111 0000 1100 0100")
+
+    f3 = des._funcao_f(r2, subchaves[2])
+    r3 = des._xor(l2, f3)
+    assert r3 == _bits("0101 1100 0101 0001 1100 1101 1111 1001")
+
+
 TESTES = [
     teste_bytes_para_bits_e_volta,
     teste_permutar_tabela_simples,
@@ -99,6 +147,8 @@ TESTES = [
     teste_ip_exemplo_pdf,
     teste_subchaves_vetor_classico_livro_texto,
     teste_subchaves_exemplo_atacar_base_norte,
+    teste_expansao_e_sbox_exemplo_pdf,
+    teste_rodadas_1_a_3_exemplo_pdf,
 ]
 
 

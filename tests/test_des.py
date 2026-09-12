@@ -139,6 +139,59 @@ def teste_rodadas_1_a_3_exemplo_pdf():
     assert r3 == _bits("0101 1100 0101 0001 1100 1101 1111 1001")
 
 
+def teste_bloco_vetor_classico_livro_texto():
+    bloco = bytes.fromhex("0123456789ABCDEF")
+    chave = bytes.fromhex("133457799BBCDFF1")
+    subchaves = des._gerar_subchaves(chave)
+
+    cifrado = des._cifrar_bloco(bloco, subchaves)
+    assert cifrado.hex().upper() == "85E813540F0AB405", cifrado.hex()
+
+    decifrado = des._decifrar_bloco(cifrado, subchaves)
+    assert decifrado == bloco
+
+
+def teste_bloco_exemplo_atacar_base_norte():
+    # Primeiro bloco de "Atacar base norte." ("Atacar b") com a chave do
+    # PDF -- confirma que as 16 rodadas completas (nao so as 3 primeiras
+    # do teste_rodadas_1_a_3_exemplo_pdf) fecham no resultado certo.
+    bloco = bytes.fromhex("4174616361722062")
+    chave = bytes.fromhex("0123456789ABCDEF")
+    subchaves = des._gerar_subchaves(chave)
+
+    cifrado = des._cifrar_bloco(bloco, subchaves)
+    assert cifrado.hex().upper() == "3044351B5A18C03D", cifrado.hex()
+
+    decifrado = des._decifrar_bloco(cifrado, subchaves)
+    assert decifrado == bloco
+
+
+def teste_mensagem_completa_exemplo_pdf():
+    # Os 3 blocos de 8 bytes de "Atacar base norte." (ultimo com padding
+    # de zeros) contra o criptograma completo dado no PDF.
+    chave = bytes.fromhex("0123456789ABCDEF")
+    subchaves = des._gerar_subchaves(chave)
+
+    texto_com_padding = b"Atacar base norte." + b"\x00" * 6
+    assert len(texto_com_padding) == 24
+    blocos_claros = [
+        texto_com_padding[i:i + 8] for i in range(0, 24, 8)
+    ]
+    assert blocos_claros[0] == b"Atacar b"
+    assert blocos_claros[1] == b"ase nort"
+    assert blocos_claros[2] == b"e.\x00\x00\x00\x00\x00\x00"
+
+    cifrado = b"".join(des._cifrar_bloco(b, subchaves) for b in blocos_claros)
+    assert cifrado.hex().upper() == (
+        "3044351B5A18C03DEF5FE56B50211EF3DF4EE0859A96E988"
+    ), cifrado.hex()
+
+    decifrado = b"".join(
+        des._decifrar_bloco(cifrado[i:i + 8], subchaves) for i in range(0, 24, 8)
+    )
+    assert decifrado == texto_com_padding
+
+
 TESTES = [
     teste_bytes_para_bits_e_volta,
     teste_permutar_tabela_simples,
@@ -149,6 +202,9 @@ TESTES = [
     teste_subchaves_exemplo_atacar_base_norte,
     teste_expansao_e_sbox_exemplo_pdf,
     teste_rodadas_1_a_3_exemplo_pdf,
+    teste_bloco_vetor_classico_livro_texto,
+    teste_bloco_exemplo_atacar_base_norte,
+    teste_mensagem_completa_exemplo_pdf,
 ]
 
 

@@ -251,3 +251,40 @@ def _funcao_f(bits_r: list[int], subchave: list[int]) -> list[int]:
     resultado_xor = _xor(expandido, subchave)
     saida_sbox = _substituir_sbox(resultado_xor)
     return _permutar(saida_sbox, P_TABELA)
+
+
+# ============================================================
+# CIFRA/DECIFRA DE UM BLOCO DE 64 BITS (16 RODADAS DE FEISTEL)
+# ============================================================
+
+def _cifrar_bloco(bloco: bytes, subchaves: list[list[int]]) -> bytes:
+    """Cifra um unico bloco de 8 bytes: permutacao inicial IP, 16 rodadas
+    de Feistel (K1..K16 nessa ordem), troca final de metades e
+    permutacao IP-1. `subchaves` deve vir de _gerar_subchaves()."""
+    bits = _permutar(_bytes_para_bits(bloco), IP)
+    esquerda, direita = bits[:32], bits[32:]
+
+    for rodada in range(16):
+        nova_esquerda = direita
+        nova_direita = _xor(esquerda, _funcao_f(direita, subchaves[rodada]))
+        esquerda, direita = nova_esquerda, nova_direita
+
+    pre_saida = direita + esquerda  # troca final de metades
+    return _bits_para_bytes(_permutar(pre_saida, IP_INV))
+
+
+def _decifrar_bloco(bloco: bytes, subchaves: list[list[int]]) -> bytes:
+    """Mesma rede de Feistel de _cifrar_bloco, com as subchaves
+    aplicadas na ordem inversa (K16..K1) -- e' o que faz a decifracao do
+    DES reusar exatamente o mesmo algoritmo da cifracao."""
+    bits = _permutar(_bytes_para_bits(bloco), IP)
+    esquerda, direita = bits[:32], bits[32:]
+
+    for rodada in range(16):
+        subchave = subchaves[15 - rodada]
+        nova_esquerda = direita
+        nova_direita = _xor(esquerda, _funcao_f(direita, subchave))
+        esquerda, direita = nova_esquerda, nova_direita
+
+    pre_saida = direita + esquerda
+    return _bits_para_bytes(_permutar(pre_saida, IP_INV))

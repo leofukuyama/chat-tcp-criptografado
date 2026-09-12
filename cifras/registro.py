@@ -1,4 +1,4 @@
-from cifras import sem_criptografia, cesar, monoalfabetica, playfair, vigenere, rc4
+from cifras import sem_criptografia, cesar, monoalfabetica, playfair, vigenere, rc4, des
 
 CIFRAS = {
     "1": sem_criptografia,
@@ -7,6 +7,7 @@ CIFRAS = {
     "4": playfair,
     "5": vigenere,
     "6": rc4,
+    "7": des,
 }
 
 NOMES = {
@@ -16,4 +17,5 @@ NOMES = {
     "4": "Cifra de Playfair",
     "5": "Cifra de Vigenère",
     "6": "Cifra de fluxo RC4",
+    "7": "Cifra DES",
 }

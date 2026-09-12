@@ -191,3 +191,28 @@ def _deslocar_esquerda(bits: list[int], quantidade: int) -> list[int]:
 
 def _xor(a: list[int], b: list[int]) -> list[int]:
     return [x ^ y for x, y in zip(a, b)]
+
+
+# ============================================================
+# GERACAO DAS 16 SUBCHAVES
+# ============================================================
+
+def _gerar_subchaves(chave_bytes: bytes) -> list[list[int]]:
+    """
+    A partir da chave de 64 bits (8 bytes), gera as 16 subchaves de 48
+    bits usadas em cada rodada -- PC-1 (64->56 bits), divide em C0/D0
+    (28 bits cada), aplica os deslocamentos circulares a esquerda por
+    rodada e concatena+permuta com PC-2 (56->48 bits). Ver README-DES.md
+    secao 5 para o passo a passo com o exemplo numerico dos slides.
+    """
+    bits_chave = _bytes_para_bits(chave_bytes)
+    chave_56 = _permutar(bits_chave, PC1)
+    c = chave_56[:28]
+    d = chave_56[28:]
+
+    subchaves = []
+    for deslocamento in DESLOCAMENTOS:
+        c = _deslocar_esquerda(c, deslocamento)
+        d = _deslocar_esquerda(d, deslocamento)
+        subchaves.append(_permutar(c + d, PC2))
+    return subchaves

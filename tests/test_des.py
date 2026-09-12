@@ -59,12 +59,46 @@ def teste_ip_exemplo_pdf():
     assert permutado == esperado
 
 
+def teste_subchaves_vetor_classico_livro_texto():
+    # M=0123456789ABCDEF, K=133457799BBCDFF1 -> C=85E813540F0AB405 e' o
+    # vetor de teste classico do DES (Stallings/Forouzan), tambem usado
+    # nos slides da disciplina para ilustrar a geracao de subchaves (K1
+    # e K2 aparecem explicitamente no PDF a partir dessa mesma chave).
+    chave = bytes.fromhex("133457799BBCDFF1")
+    subchaves = des._gerar_subchaves(chave)
+    assert len(subchaves) == 16
+    assert all(len(k) == 48 for k in subchaves)
+    assert subchaves[0] == _bits(
+        "000110 110000 001011 101111 111111 000111 000001 110010"
+    )
+    assert subchaves[1] == _bits(
+        "011110 011010 111011 011001 110110 111100 100111 100101"
+    )
+
+
+def teste_subchaves_exemplo_atacar_base_norte():
+    # Chave usada no exemplo pratico do PDF ("Atacar base norte.").
+    chave = bytes.fromhex("0123456789ABCDEF")
+    subchaves = des._gerar_subchaves(chave)
+    assert subchaves[0] == _bits(
+        "000010 110000 001001 100111 100110 110100 100110 100101"
+    )
+    assert subchaves[1] == _bits(
+        "011010 011010 011001 011001 001001 010110 101000 100110"
+    )
+    assert subchaves[2] == _bits(
+        "010001 011101 010010 001010 101101 000010 100011 010010"
+    )
+
+
 TESTES = [
     teste_bytes_para_bits_e_volta,
     teste_permutar_tabela_simples,
     teste_deslocar_esquerda,
     teste_xor,
     teste_ip_exemplo_pdf,
+    teste_subchaves_vetor_classico_livro_texto,
+    teste_subchaves_exemplo_atacar_base_norte,
 ]
 
 

@@ -400,7 +400,7 @@ def decifrar(texto: str, chave: str) -> str:
     completo, e chave errada produz bytes que decodificam como lixo via
     errors="backslashreplace" -- igual ao rc4.decifrar().
 
-    Limitação aceita: o padding usa zeros à direita (rstrip(b"\x00")), então
+    Limitação aceita: o padding usa zeros à direita (rstrip(b"\\x00")), então
     um texto original que termine com byte(s) NUL de verdade seria removido
     junto como se fosse padding -- inatingível na prática pelo chat, já que
     input() nunca produz um NUL embutido no texto digitado.

@@ -329,15 +329,10 @@ def _preparar_chave(chave: str) -> bytes:
     >>> _preparar_chave("ab")
     b'ab\\x00\\x00\\x00\\x00\\x00\\x00'
     """
-    chave_normalizada = ascii_puro.normalizar(chave)
-
-    if not chave_normalizada:
-        raise ValueError("A chave não pode ser vazia.")
-
-    # Truncate to 8 characters (silently, para robustez em decifrar)
-    chave_normalizada = chave_normalizada[:TAMANHO_BLOCO]
-
-    chave_bytes = chave_normalizada.encode("ascii", errors="ignore")
+    valida, erro = validar_chave(chave)
+    if not valida:
+        raise ValueError(erro)
+    chave_bytes = ascii_puro.normalizar(chave).encode("ascii")
     return chave_bytes.ljust(TAMANHO_BLOCO, b"\x00")
 
 

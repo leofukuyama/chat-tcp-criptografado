@@ -305,6 +305,31 @@ def teste_cifrar_com_chave_vazia_estoura_valueerror_claro():
         assert False, "cifrar() aceitou chave vazia em silencio"
 
 
+def teste_validar_chave_aceita_hexadecimal_do_slide():
+    # Chave do slide "DES - Aplicacao": 16 digitos hexadecimais = 8 bytes.
+    for chave in ["0123456789ABCDEF", "01 23 45 67 89 AB CD EF", "0123456789abcdef"]:
+        valido, erro = des.validar_chave(chave)
+        assert valido is True, f"Chave hexadecimal {chave!r} foi rejeitada: {erro}"
+
+
+def teste_preparar_chave_hexadecimal_vira_bytes_crus():
+    esperado = bytes.fromhex("0123456789ABCDEF")
+    assert des._preparar_chave("0123456789ABCDEF") == esperado
+    assert des._preparar_chave("01 23 45 67 89 AB CD EF") == esperado
+
+
+def teste_cifrar_com_chave_hexadecimal_bate_com_slide():
+    cifrado = des.cifrar("Atacar base norte.", "01 23 45 67 89 AB CD EF")
+    esperado = bytes.fromhex("3044351B5A18C03DEF5FE56B50211EF3DF4EE0859A96E988")
+    assert base64.b64decode(cifrado) == esperado
+    assert des.decifrar(cifrado, "0123456789ABCDEF") == "Atacar base norte."
+
+
+def teste_validar_chave_rejeita_hexadecimal_incompleto():
+    valido, erro = des.validar_chave("0123456789ABCDE")  # 15 digitos
+    assert valido is False
+
+
 TESTES = [
     teste_bytes_para_bits_e_volta,
     teste_permutar_tabela_simples,
@@ -325,6 +350,10 @@ TESTES = [
     teste_validar_chave_rejeita_nao_ascii,
     teste_validar_chave_normaliza_acento,
     teste_preparar_chave_completa_com_zeros,
+    teste_validar_chave_aceita_hexadecimal_do_slide,
+    teste_preparar_chave_hexadecimal_vira_bytes_crus,
+    teste_cifrar_com_chave_hexadecimal_bate_com_slide,
+    teste_validar_chave_rejeita_hexadecimal_incompleto,
     teste_cifrar_produz_base64_valido,
     teste_ida_e_volta_round_trip,
     teste_ida_e_volta_com_chave_curta,

@@ -13,11 +13,16 @@ Duas camadas neste modulo:
      0x89 e 0xAB que nunca poderiam ser digitados como texto no chat).
 
   2. CONTRATO DO CHAT (validar_chave/cifrar/decifrar/bytes_brutos):
-     e' o que cifras/registro.py e client.py enxergam. Aqui a chave e'
-     uma senha em ASCII (igual as outras 5 cifras do catalogo), com no
-     maximo 8 caracteres -- completada com zeros a direita se for mais
-     curta, exatamente como o professor autorizou preencher com zero
-     qualquer coisa que precise fechar em 64 bits.
+     e' o que cifras/registro.py e client.py enxergam. A chave aceita
+     dois formatos, que nunca se confundem (um tem ate 8 caracteres, o
+     outro exatamente 16 digitos):
+       - senha em ASCII (igual as outras cifras do catalogo), com no
+         maximo 8 caracteres -- completada com zeros a direita se for
+         mais curta, exatamente como o professor autorizou preencher com
+         zero qualquer coisa que precise fechar em 64 bits;
+       - 16 digitos hexadecimais (espacos opcionais), como no slide
+         "DES - Aplicacao": "01 23 45 67 89 AB CD EF" vira os 8 bytes
+         crus 0x01 0x23 ... 0xEF.
 
 Bloco e chave do DES tem sempre 64 bits (8 bytes). Chave efetiva e' de 56
 bits -- os outros 8 sao descartados pela PC-1 (bits de paridade).
@@ -294,17 +299,41 @@ def _decifrar_bloco(bloco: bytes, subchaves: list[list[int]]) -> bytes:
 # CONTRATO DO CHAT (ASCII na entrada, Base64 na saida)
 # ============================================================
 
+def _chave_hexadecimal(chave: str) -> bytes | None:
+    """
+    Se a chave for exatamente 16 digitos hexadecimais (espacos ignorados),
+    devolve os 8 bytes correspondentes; senao, None.
+
+    >>> _chave_hexadecimal("01 23 45 67 89 AB CD EF").hex()
+    '0123456789abcdef'
+    >>> _chave_hexadecimal("Senha123") is None
+    True
+    """
+    digitos = "".join(chave.split())
+    if len(digitos) != 2 * TAMANHO_BLOCO:
+        return None
+    if any(c not in "0123456789abcdefABCDEF" for c in digitos):
+        return None
+    return bytes.fromhex(digitos)
+
+
 def validar_chave(chave: str) -> tuple[bool, str]:
     """
-    Regras: nao vazia, ASCII puro apos normalizar acento, no maximo
-    TAMANHO_BLOCO (8) caracteres -- o DES usa chave de 64 bits e uma
-    senha maior nao caberia sem truncar em silencio.
+    Aceita 16 digitos hexadecimais (ver _chave_hexadecimal) ou uma senha:
+    nao vazia, ASCII puro apos normalizar acento, no maximo TAMANHO_BLOCO
+    (8) caracteres -- o DES usa chave de 64 bits e uma senha maior nao
+    caberia sem truncar em silencio.
 
     >>> validar_chave("Senha123")
+    (True, '')
+    >>> validar_chave("01 23 45 67 89 AB CD EF")
     (True, '')
     >>> validar_chave("")
     (False, 'A chave não pode ser vazia.')
     """
+    if _chave_hexadecimal(chave) is not None:
+        return True, ""
+
     chave_normalizada = ascii_puro.normalizar(chave)
 
     if not chave_normalizada:
@@ -315,16 +344,20 @@ def validar_chave(chave: str) -> tuple[bool, str]:
         return False, f"A chave deve conter apenas caracteres ASCII ({erro})."
 
     if len(chave_normalizada) > TAMANHO_BLOCO:
-        return False, f"A chave deve ter no máximo {TAMANHO_BLOCO} caracteres."
+        return False, (
+            f"A chave deve ter no máximo {TAMANHO_BLOCO} caracteres ou exatamente "
+            f"{2 * TAMANHO_BLOCO} dígitos hexadecimais (ex.: 01 23 45 67 89 AB CD EF)."
+        )
 
     return True, ""
 
 
 def _preparar_chave(chave: str) -> bytes:
     """
-    Valida e converte a chave para exatamente 8 bytes, completando com
-    zeros a direita se for mais curta -- mesmo principio de padding
-    autorizado pelo professor para o texto, aplicado aqui a chave.
+    Valida e converte a chave para exatamente 8 bytes: chave hexadecimal
+    vira os bytes crus; senha ASCII e' completada com zeros a direita se
+    for mais curta -- mesmo principio de padding autorizado pelo
+    professor para o texto, aplicado aqui a chave.
 
     >>> _preparar_chave("ab")
     b'ab\\x00\\x00\\x00\\x00\\x00\\x00'
@@ -332,6 +365,9 @@ def _preparar_chave(chave: str) -> bytes:
     valida, erro = validar_chave(chave)
     if not valida:
         raise ValueError(erro)
+    chave_hex = _chave_hexadecimal(chave)
+    if chave_hex is not None:
+        return chave_hex
     chave_bytes = ascii_puro.normalizar(chave).encode("ascii")
     return chave_bytes.ljust(TAMANHO_BLOCO, b"\x00")
 

@@ -133,7 +133,11 @@ def mostrar_quadro(quadro, modulo, chave):
         print(f"[CIFRADO decimal] {list(brutos)}")
         print(f"[CIFRADO hexadecimal] {brutos.hex(' ').upper()}")
 
-    print(f"[DECIFRADO] {texto_claro}\n > ", end="", flush=True)
+    print(f"[DECIFRADO] {texto_claro}")
+    if hasattr(modulo, "bytes_brutos"):
+        # Texto plano em hexadecimal (sem o padding de zeros), como no slide.
+        print(f"[DECIFRADO hexadecimal] {texto_claro.encode('ascii', 'replace').hex(' ').upper()}")
+    print(" > ", end="", flush=True)
     return True
 
 
@@ -252,6 +256,8 @@ def write(modulo, chave):
             brutos = modulo.bytes_brutos(cifrado)
             print(f"   [CIFRADO decimal] {list(brutos)}")
             print(f"   [CIFRADO hexadecimal] {brutos.hex(' ').upper()}")
+            # Texto plano em hexadecimal (sem o padding de zeros), como no slide.
+            print(f"   [TEXTO PLANO hexadecimal] {texto_claro.encode('ascii', 'replace').hex(' ').upper()}")
 
         # empacotar() aplica a CAMADA 2 (errors="strict") e valida o
         # tamanho. Mesmo que a camada 1 falhasse, é impossível um byte

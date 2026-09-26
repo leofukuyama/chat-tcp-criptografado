@@ -587,6 +587,46 @@ Texto Cifrado = 30 44 35 1B 5A 18 C0 3D EF 5F E5 6B 50 21 1E F3 DF 4E E0 85 9A 9
 > Use o simulador [simewu.com/des](https://simewu.com/des/) para reproduzir esse
 > exemplo passo a passo e validar uma implementação própria do DES.
 
+### 7.8. Reproduzindo o exemplo no chat (opção 7)
+
+O texto de 18 bytes ocupa 3 blocos de 64 bits; o último tem só 2 bytes e é
+completado com 6 bytes `00` (padding com zeros, como no slide). O modo é o **ECB**:
+cada bloco é cifrado sozinho, com as mesmas subchaves.
+
+| Bloco | Texto plano (hex) | Texto cifrado (hex) |
+|---|---|---|
+| 1 | `41 74 61 63 61 72 20 62` ("Atacar b") | `30 44 35 1B 5A 18 C0 3D` |
+| 2 | `61 73 65 20 6E 6F 72 74` ("ase nort") | `EF 5F E5 6B 50 21 1E F3` |
+| 3 | `65 2E 00 00 00 00 00 00` ("e." + padding) | `DF 4E E0 85 9A 96 E9 88` |
+
+No `client.py`, escolha a opção **7** e informe a chave do slide, com ou sem
+espaços (a chave também pode ser uma senha ASCII de até 8 caracteres):
+
+```
+Opção: 7
+Chave: 0123456789ABCDEF          (ou: 01 23 45 67 89 AB CD EF)
+ > Atacar base norte.
+```
+
+O chat mostra o resultado em Base64 (o que trafega na rede, que só aceita ASCII), em
+decimal e em hexadecimal — a linha hexadecimal é a mesma do slide:
+
+```
+   [CIFRADO]   MEQ1G1oYwD3vX+VrUCEe899O4IWalumI
+   [CIFRADO decimal] [48, 68, 53, 27, 90, 24, 192, 61, 239, 95, 229, 107, 80, 33, 30, 243, 223, 78, 224, 133, 154, 150, 233, 136]
+   [CIFRADO hexadecimal] 30 44 35 1B 5A 18 C0 3D EF 5F E5 6B 50 21 1E F3 DF 4E E0 85 9A 96 E9 88
+   [TEXTO PLANO hexadecimal] 41 74 61 63 61 72 20 62 61 73 65 20 6E 6F 72 74 65 2E
+```
+
+Quem recebe vê `[DECIFRADO]` e `[DECIFRADO hexadecimal]` com o texto original.
+
+> **Atenção ao digitar:** o texto tem de ser exatamente `Atacar base norte.` — `A`
+> maiúsculo e ponto final. Com `a` minúsculo (`0x61` em vez de `0x41`) o bloco 1
+> muda por completo; sem o `.` (`0x2E`) o bloco 3 muda. Os blocos são independentes
+> no ECB, então uma diferença afeta só o bloco em que ocorre (o bloco 2, "ase nort",
+> sai igual nos dois casos). A verificação automática desse exemplo está em
+> `tests/test_des.py::teste_cifrar_com_chave_hexadecimal_bate_com_slide`.
+
 ---
 
 ## 8. Descriptografia no DES

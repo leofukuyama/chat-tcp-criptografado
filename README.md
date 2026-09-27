@@ -24,10 +24,12 @@ conteúdo técnico do trabalho:
 2. **Uma política de charset ASCII com defesa em profundidade** (`ascii_puro.py`), com três
    pontos de verificação independentes, sendo o do servidor um *choke point* que vale
    mesmo contra um cliente adulterado.
-3. **Cinco modos de transmissão plugáveis** (`cifras/`), obedecendo a um contrato comum,
+3. **Sete modos de transmissão plugáveis** (`cifras/`) — sem cifra, cinco cifras clássicas ou de
+   fluxo (César, monoalfabética, Playfair, Vigenère, RC4) e a cifra de bloco **DES** —,
+   obedecendo a um contrato comum,
    de modo que o núcleo de rede desconhece qual cifra está em uso.
 
-A suíte de verificação contém **147 testes** (unitários, de propriedade e de integração com
+A suíte de verificação contém **200 testes** (unitários, de propriedade e de integração com
 sockets reais) e **doctests executáveis** embutidos nos módulos. Todos passam na versão
 corrente.
 
@@ -62,6 +64,7 @@ corrente.
 | R4 | Escolha da cifra e da chave pelo usuário | `client.py::escolher_cifra()` |
 | R5 | Cifras: César, monoalfabética, Playfair, Vigenère, e modo aberto | `cifras/` |
 | R5+ | *(extensão além do enunciado)* Cifra de fluxo RC4 | `cifras/rc4.py`, §6.8 |
+| R5+ | *(extensão além do enunciado)* Cifra de bloco DES (chave ASCII de até 8 caracteres ou 16 dígitos hexadecimais) | `cifras/des.py`, `README-DES.md` §7 |
 | R6 | Normalização: maiúsculas, `Á→A`, `Ç→C`, pontuação preservada | `ascii_puro.normalizar()` |
 | R7 | **Apenas ASCII (0–127) circula na rede** | `ascii_puro.py` (3 camadas) |
 | R8 | O sistema nunca cai por causa de um caractere inesperado | tratamento de erro em todas as bordas |
@@ -581,13 +584,15 @@ derrubar o cliente:
 | **Chave errada** | O XOR produz bytes fora do ASCII quase sempre (~50% de chance por byte); `decode("ascii", errors="backslashreplace")` troca cada byte problemático por um escape `\xHH` em vez de estourar `UnicodeDecodeError` |
 
 **Visível diretamente no chat, sem ferramenta externa.** Tanto quem envia quanto quem recebe
-veem o criptograma em duas formas: `[CIFRADO]` (Base64, o que de fato trafega) e
+veem o criptograma em três formas: `[CIFRADO]` (Base64, o que de fato trafega),
 `[CIFRADO decimal]` (os mesmos bytes, no formato `[159 115 2 ...]` usado pelo "Texto Cript."
-dos gabaritos de teste da disciplina) — via `rc4.bytes_brutos()`, uma extensão **opcional**
-do contrato das cifras (documentada em `cifras/sem_criptografia.py`; as outras cinco não
-precisam implementá-la porque o próprio criptograma já é ASCII exibível). `client.py`
-detecta essa função com `hasattr(modulo, "bytes_brutos")`, sem precisar saber por nome que a
-cifra ativa é o RC4.
+dos gabaritos de teste da disciplina) e `[CIFRADO hexadecimal]` (`9F 73 02 ...`, o formato dos
+slides) — além do texto plano em hexadecimal (`[TEXTO PLANO hexadecimal]` ao enviar,
+`[DECIFRADO hexadecimal]` ao receber). Tudo isso vem de `rc4.bytes_brutos()`, uma extensão
+**opcional** do contrato das cifras (documentada em `cifras/sem_criptografia.py`; as
+cifras clássicas não precisam implementá-la porque o próprio criptograma já é ASCII exibível;
+o DES, §6.9, também a implementa). `client.py` detecta essa função com
+`hasattr(modulo, "bytes_brutos")`, sem precisar saber por nome qual é a cifra ativa.
 
 **Espaço de chaves:** $\|\mathcal{K}\| = 256^L$ para uma chave de $L$ bytes ($1 \le L \le
 256$) — até $2^{2048}$ no limite superior, ordens de magnitude acima de qualquer outra cifra
@@ -621,7 +626,58 @@ O núcleo (`rc4._rc4_xor`) é verificado contra três vetores de teste canônico
 teste fornecidos pela disciplina (mesmo texto plano, chaves de 8/97/253 bytes), todos em
 `tests/test_rc4.py::teste_vetores_da_disciplina`.
 
-### 6.9 Quadro comparativo
+### 6.9 Opção 7 — Cifra de bloco DES
+
+Segunda extensão além do escopo original e a única **cifra de bloco** do catálogo. Implementada
+do zero em `cifras/des.py` a partir das tabelas oficiais (FIPS 46-3), seguindo os slides da
+Aula 4; o guia de estudo completo (Feistel, subchaves, S-BOX, exemplo numérico) está em
+[README-DES.md](README-DES.md).
+
+**Estrutura.** Blocos de 64 bits, 16 rodadas de Feistel, chave de 64 bits dos quais 56 são
+efetivos (a `PC-1` descarta os 8 bits de paridade). O módulo tem duas camadas: o **motor DES**
+(`_cifrar_bloco`, `_gerar_subchaves`...) opera sobre bytes crus e é validado contra vetores
+clássicos; o **contrato do chat** (`validar_chave`/`cifrar`/`decifrar`/`bytes_brutos`) é o que
+o restante do projeto enxerga.
+
+**Modo e padding.** Modo **ECB**: cada bloco de 8 bytes é cifrado de forma independente com as
+mesmas subchaves. O último bloco incompleto é completado com bytes `00` (padding com zeros,
+como no slide) e o padding é removido na decifração. Como o criptograma tem bytes 0–255,
+trafega em **Base64** — mesmo motivo do RC4 (R7).
+
+**Chave — dois formatos aceitos**, que não se confundem (um tem até 8 caracteres, o outro
+exatamente 16 dígitos):
+
+| Formato | Exemplo | Como vira os 8 bytes da chave |
+|---|---|---|
+| 16 dígitos hexadecimais (espaços opcionais) | `0123456789ABCDEF` ou `01 23 45 67 89 AB CD EF` | bytes crus `01 23 45 67 89 AB CD EF` — a chave do slide |
+| Senha ASCII de 1 a 8 caracteres | `Senha123` | bytes ASCII, completados com `00` à direita |
+
+**Reproduzindo o exemplo do professor.** Com a opção 7, a chave `0123456789ABCDEF` e a frase
+`Atacar base norte.` (`A` maiúsculo e ponto final), o chat exibe:
+
+```
+[CIFRADO hexadecimal] 30 44 35 1B 5A 18 C0 3D EF 5F E5 6B 50 21 1E F3 DF 4E E0 85 9A 96 E9 88
+[TEXTO PLANO hexadecimal] 41 74 61 63 61 72 20 62 61 73 65 20 6E 6F 72 74 65 2E
+```
+
+exatamente o "Texto Cifrado" do slide. O passo a passo, os três blocos e o aviso sobre o
+que muda se a frase for digitada de outro jeito estão em [README-DES.md §7.8](README-DES.md).
+O teste `tests/test_des.py::teste_cifrar_com_chave_hexadecimal_bate_com_slide` fixa esse
+resultado.
+
+**Criptanálise — por que o DES está obsoleto.** O espaço de chaves é de apenas $2^{56}$: em
+1998 a EFF construiu uma máquina dedicada (*Deep Crack*) que o esgotou em poucos dias, e hoje
+é trivial com hardware moderno. O sucessor de transição foi o 3DES e, depois, o AES. Além
+disso, o **ECB** vaza padrões: blocos de texto plano iguais geram blocos cifrados iguais, e a
+mesma mensagem com a mesma chave produz sempre o mesmo criptograma (o CBC, com IV, resolveria
+isso, mas foge do exemplo dos slides). Uma senha ASCII de 8 caracteres é ainda mais fraca que
+os 56 bits: a `PC-1` descarta o bit menos significativo de cada byte e o bit mais
+significativo do ASCII é sempre 0, então restam no máximo 6 bits úteis por caractere.
+
+`decifrar()` segue a garantia do projeto: nunca lança exceção (Base64 inválido ou chave errada
+produzem lixo exibível, não uma queda).
+
+### 6.10 Quadro comparativo
 
 | Cifra | Tipo | $\|\mathcal{K}\|$ | ≈ bits | Ataque decisivo | Custo do ataque |
 |---|---|---|---|---|---|
@@ -631,12 +687,15 @@ teste fornecidos pela disciplina (mesmo texto plano, chaves de 8/97/253 bytes), 
 | Playfair | Substituição digrâmica | $25!$ | 83,7 | frequência de digramas | horas, texto moderado |
 | Vigenère | Substituição polialfabética | $26^m$ | $4{,}7m$ | Kasiski + IC → $m$ Césares | horas, texto ≫ $m$ |
 | RC4 | Fluxo (XOR com keystream) | $256^L$ | $8L$ | viés estatístico (Mantin–Shamir) + reuso de chave | dias/semanas, tráfego alto, criptoanálise especializada |
+| DES | Bloco 64 bits (Feistel, 16 rodadas), ECB | $2^{56}$ | 56 | força bruta (*Deep Crack*, 1998); ECB vaza padrões | dias em 1998; hoje horas com hardware dedicado |
 
 **Conclusão pedagógica do quadro:** monoalfabética e Playfair têm espaço de chaves da ordem
 de 84–88 bits — comparável a chaves simétricas reais — e ainda assim são quebráveis
 manualmente; RC4 vai além, com espaço de chaves que chega a $2^{2048}$, e mesmo assim é
-considerado obsoleto pela criptografia moderna. **Espaço de chaves grande é condição
-necessária, jamais suficiente.** Nas cinco primeiras cifras, o que falta é *difusão* e
+considerado obsoleto pela criptografia moderna. O DES é o caso inverso: estruturalmente
+sólido (Feistel, com confusão e difusão reais), mas com chave curta demais — cai por força
+bruta. **Espaço de chaves grande é condição necessária, jamais suficiente** (e a estrutura
+boa também não salva uma chave pequena). Nas cinco primeiras cifras, o que falta é *difusão* e
 *confusão* no sentido de Shannon — nenhuma destrói a estrutura estatística do texto claro. No
 RC4 a falha é outra, mais sutil: um viés estatístico no próprio gerador pseudoaleatório, que
 só a criptoanálise moderna (não o papel e lápis) consegue explorar.
@@ -741,6 +800,7 @@ Escolha o modo de transmissão:
 4 - Cifra de Playfair
 5 - Cifra de Vigenère
 6 - Cifra de fluxo RC4
+7 - Cifra DES
 Opção: 2
 Chave: 3
  >
@@ -816,11 +876,11 @@ Roteiro sugerido para a demonstração:
 
 **Nota sobre o formato do criptograma.** O que aparece em
 `[CIFRADO recebido] ...` no console do servidor e o que aparece no
-Wireshark é o RC4 em **Base64** (única forma ASCII-transportável — bytes
-crus de RC4 vão até 255, violariam R7). Não é comparável a olho com o
+Wireshark é o RC4 (ou o DES, opção 7) em **Base64** (única forma ASCII-transportável —
+bytes crus dessas cifras vão até 255, violariam R7). Não é comparável a olho com o
 formato de "Texto Cript." dos gabaritos de sala de aula, que é uma lista
-de bytes em **decimal**. São os *mesmos* bytes, só escritos de duas formas
-diferentes: `scripts/verificar_wireshark.py` imprime as duas formas lado a
+de bytes em **decimal** (ou em **hexadecimal**, como nos slides do DES). São os *mesmos*
+bytes, só escritos de formas diferentes: `scripts/verificar_wireshark.py` imprime as duas formas lado a
 lado (Base64 e decimal) exatamente para essa comparação.
 
 Para mostrar ao professor que a implementação bate com o gabarito da
@@ -866,10 +926,11 @@ python tests/test_monoalfabetica.py
 python tests/test_playfair.py
 python tests/test_vigenere.py
 python tests/test_rc4.py
+python tests/test_des.py
 python tests/test_integracao_ascii.py     # sobe o servidor real; leva alguns segundos
 
 # doctests dos módulos de produção (sem saída = tudo passou)
-python -m doctest ascii_puro.py protocolo.py cifras/cesar.py cifras/monoalfabetica.py cifras/playfair.py cifras/vigenere.py cifras/rc4.py
+python -m doctest ascii_puro.py protocolo.py cifras/cesar.py cifras/monoalfabetica.py cifras/playfair.py cifras/vigenere.py cifras/rc4.py cifras/des.py
 ```
 
 > O teste de integração ocupa a porta **64146**. Encerre qualquer `server.py` em execução
@@ -886,9 +947,10 @@ python -m doctest ascii_puro.py protocolo.py cifras/cesar.py cifras/monoalfabeti
 | `test_playfair.py` | 33/33 | ✅ |
 | `test_vigenere.py` | 17/17 | ✅ |
 | `test_rc4.py` | 21/21 | ✅ |
+| `test_des.py` | 32/32 | ✅ |
 | `test_integracao_ascii.py` | 13/13 | ✅ |
-| **Total** | **168/168** | ✅ |
-| Doctests (7 módulos) | — | ✅ sem falhas |
+| **Total** | **200/200** | ✅ |
+| Doctests (8 módulos) | — | ✅ sem falhas |
 | Diagnósticos `diag_*` (Playfair + Vigenère) | 0/9 defeitos ainda presentes | ✅ |
 
 Os testes `diag_*` são um recurso metodológico: cada um **reproduz** um defeito da §5.3 e
@@ -933,22 +995,28 @@ Enumeradas como parte do trabalho, não omitidas.
    descartados (*RC4-drop*), decisão deliberada para manter o resultado verificável contra
    vetores de teste canônicos — mas que preserva o viés estatístico conhecido do algoritmo.
 
+7. **DES: chave de 56 bits e modo ECB** (§6.9): a chave é curta demais para os padrões atuais
+   e o ECB deixa padrões do texto plano visíveis no criptograma (blocos iguais → blocos
+   iguais). O padding com zeros também removeria `00` legítimos no fim da mensagem, o que é
+   inatingível pelo chat. São escolhas deliberadas para reproduzir o exemplo dos slides.
+
 **Arquiteturais**
 
-7. **Uma thread por cliente.** Modelo simples e adequado à escala do trabalho, mas
+8. **Uma thread por cliente.** Modelo simples e adequado à escala do trabalho, mas
    $O(n)$ em threads. Para muitas conexões, o caminho seria `selectors`/`asyncio`.
-8. **Sem persistência.** Nenhuma mensagem é armazenada; o histórico não sobrevive à sessão.
-9. **Sem autenticação de entidade.** Qualquer um que alcance a porta entra na sala.
-10. **Payload limitado a 9999 octetos** por quadro (§4.2). Suficiente para chat digitado, mas
+9. **Sem persistência.** Nenhuma mensagem é armazenada; o histórico não sobrevive à sessão.
+10. **Sem autenticação de entidade.** Qualquer um que alcance a porta entra na sala.
+11. **Payload limitado a 9999 octetos** por quadro (§4.2). Suficiente para chat digitado, mas
     é um limite duro do formato.
-11. **Sem TLS.** Adicioná-lo daria confidencialidade e integridade **contra a rede**, mas
+12. **Sem TLS.** Adicioná-lo daria confidencialidade e integridade **contra a rede**, mas
     não contra o servidor — que continuaria sendo o ponto de terminação. A propriedade de
     servidor cego deste projeto é ortogonal a isso e, nesse aspecto específico, mais forte.
 
 **Extensão implementada além do escopo original:** a cifra de fluxo RC4 (§6.8), que era
 citada aqui como extensão natural em versões anteriores deste documento (nome da branch de
 desenvolvimento original, `cifra-rc4`), foi efetivamente implementada, com a codificação de
-transporte em Base64 antecipada nesta mesma nota.
+transporte em Base64 antecipada nesta mesma nota. Uma segunda extensão, a cifra de bloco DES
+(§6.9, opção 7), foi implementada em seguida na branch `feat/DES`.
 
 ---
 
@@ -971,7 +1039,8 @@ chat-tcp-criptografado/
 │   ├── monoalfabetica.py      Substituição por permutação (str.maketrans).
 │   ├── playfair.py            Substituição digrâmica, matriz 5×5, fillers X/Q.
 │   ├── vigenere.py            Substituição polialfabética, preserva caixa.
-│   └── rc4.py                 Cifra de fluxo (KSA+PRGA), transporte em Base64.
+│   ├── rc4.py                 Cifra de fluxo (KSA+PRGA), transporte em Base64.
+│   └── des.py                 Cifra de bloco DES (ECB), chave ASCII ou hexadecimal, Base64.
 │
 ├── tests/
 │   ├── test_ascii_puro.py         30 testes — política de charset (cobre as 6 cifras)
@@ -981,6 +1050,7 @@ chat-tcp-criptografado/
 │   ├── test_playfair.py           33 testes + 5 diagnósticos
 │   ├── test_vigenere.py           17 testes + 4 diagnósticos
 │   ├── test_rc4.py                21 testes — inclui vetores canônicos da literatura e da disciplina
+│   ├── test_des.py                32 testes — vetores clássicos e o exemplo dos slides ("Atacar base norte.")
 │   └── test_integracao_ascii.py   13 testes — servidor real, sockets crus
 │
 ├── docs/
@@ -993,6 +1063,8 @@ chat-tcp-criptografado/
 │
 ├── README-VIGENERE-PLAYFAIR.md   Documento de apoio à apresentação: passo a passo
 │                                  didático das duas cifras
+├── README-DES.md                 Guia de estudo do DES (Feistel, subchaves, rodadas) e o
+│                                  exemplo dos slides reproduzido no chat
 └── README.md                     Este documento
 ```
 
@@ -1021,6 +1093,11 @@ implementação.
 - KASISKI, Friedrich W. *Die Geheimschriften und die Dechiffrir-Kunst*. Berlim, 1863.
 
 **Normas e especificações**
+
+- NIST. **FIPS PUB 46-3** — *Data Encryption Standard (DES)*, 1999. — tabelas IP, PC-1, PC-2,
+  E, P e S-BOXes usadas em `cifras/des.py`.
+- Slides "Aula 4" (UniSENAI-PR) — Cifra de Bloco, Cifra de Feistel, DES e 3DES; origem do
+  exemplo "Atacar base norte." (ver [README-DES.md](README-DES.md)).
 
 - IETF. **RFC 20** — *ASCII format for Network Interchange*, 1969.
 - IETF. **RFC 793 / RFC 9293** — *Transmission Control Protocol*. — TCP como fluxo de

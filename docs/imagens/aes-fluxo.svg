@@ -1,0 +1,206 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 1560" width="1500" height="1560" font-family="Segoe UI, Arial, sans-serif">
+<defs><marker id="a" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker></defs>
+<rect width="1500" height="1560" fill="#f8fafc"/>
+<text x="750.0" y="48" font-size="30" fill="#0f172a" text-anchor="middle" font-weight="700">Fluxo de funcionamento do AES-128 no chat TCP criptografado</text>
+<text x="750.0" y="76" font-size="15" fill="#64748b" text-anchor="middle" font-weight="400">cifras/aes.py  ·  opção 8 do cliente  ·  implementação do zero (FIPS-197), bit a bit</text>
+<circle cx="52" cy="122" r="17" fill="#1e3a8a"/>
+<text x="52" y="128" font-size="16" fill="#fff" text-anchor="middle" font-weight="700">1</text>
+<text x="82" y="128" font-size="22" fill="#0f172a" text-anchor="start" font-weight="700">Caminho da mensagem</text>
+<text x="326" y="128" font-size="14" fill="#64748b" text-anchor="start" font-weight="400">(o servidor nunca vê a chave nem o texto claro)</text>
+<rect x="30" y="150" width="610" height="200" rx="14" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="7 5"/>
+<text x="48" y="174" font-size="14" fill="#2563eb" text-anchor="start" font-weight="700">CLIENTE A (remetente)</text>
+<rect x="48" y="190" width="130" height="76" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.6"/>
+<text x="113.0" y="223.0" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">Usuário digita</text>
+<text x="113.0" y="243.0" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">texto ASCII</text>
+<rect x="206" y="190" width="130" height="76" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.6"/>
+<text x="271.0" y="213.0" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">ascii_puro</text>
+<text x="271.0" y="233.0" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">.preparar()</text>
+<text x="271.0" y="253.0" text-anchor="middle" font-size="12.5" fill="#475569">remove acentos</text>
+<rect x="364" y="190" width="130" height="76" rx="10" fill="#ffedd5" stroke="#ea580c" stroke-width="1.6"/>
+<text x="429.0" y="223.0" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">aes.cifrar()</text>
+<text x="429.0" y="243.0" text-anchor="middle" font-size="12.5" fill="#475569">blocos de 16 B</text>
+<rect x="522" y="190" width="100" height="76" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.6"/>
+<text x="572.0" y="223.0" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">Base64</text>
+<text x="572.0" y="243.0" text-anchor="middle" font-size="12.5" fill="#475569">só ASCII</text>
+<line x1="178" y1="228" x2="206" y2="228" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<line x1="336" y1="228" x2="364" y2="228" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<line x1="494" y1="228" x2="522" y2="228" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<text x="48" y="296" font-size="13" fill="#334155" text-anchor="start" font-weight="400">• texto → bytes ASCII; último bloco completado com zeros (padding)</text>
+<text x="48" y="318" font-size="13" fill="#334155" text-anchor="start" font-weight="400">• chave: ≤16 caracteres ASCII  ou  32 dígitos hex  →  16 bytes</text>
+<rect x="680" y="150" width="190" height="200" rx="14" fill="#f1f5f9" stroke="#64748b" stroke-width="1.5" stroke-dasharray="7 5"/>
+<text x="775" y="174" font-size="14" fill="#475569" text-anchor="middle" font-weight="700">SERVIDOR</text>
+<rect x="698" y="196" width="154" height="84" rx="10" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.6"/>
+<text x="775.0" y="223.0" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">repassa o quadro</text>
+<text x="775.0" y="243.0" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">TCP (cego)</text>
+<text x="775.0" y="263.0" text-anchor="middle" font-size="12.5" fill="#475569">só vê o Base64</text>
+<text x="775" y="306" font-size="12.5" fill="#475569" text-anchor="middle" font-weight="400">mostra o criptograma</text>
+<text x="775" y="324" font-size="12.5" fill="#475569" text-anchor="middle" font-weight="400">não decifra</text>
+<rect x="910" y="150" width="560" height="200" rx="14" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5" stroke-dasharray="7 5"/>
+<text x="928" y="174" font-size="14" fill="#16a34a" text-anchor="start" font-weight="700">CLIENTE B (destinatário)</text>
+<rect x="928" y="190" width="120" height="76" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.6"/>
+<text x="988.0" y="213.0" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">Base64</text>
+<text x="988.0" y="233.0" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">→ bytes</text>
+<text x="988.0" y="253.0" text-anchor="middle" font-size="12.5" fill="#475569">bytes_brutos()</text>
+<rect x="1074" y="190" width="150" height="76" rx="10" fill="#ffedd5" stroke="#ea580c" stroke-width="1.6"/>
+<text x="1149.0" y="223.0" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">aes.decifrar()</text>
+<text x="1149.0" y="243.0" text-anchor="middle" font-size="12.5" fill="#475569">blocos de 16 B</text>
+<rect x="1250" y="190" width="100" height="76" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/>
+<text x="1300.0" y="213.0" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">tira o</text>
+<text x="1300.0" y="233.0" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">padding</text>
+<text x="1300.0" y="253.0" text-anchor="middle" font-size="12.5" fill="#475569">zeros à dir.</text>
+<rect x="1366" y="190" width="88" height="76" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/>
+<text x="1410.0" y="223.0" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">exibe</text>
+<text x="1410.0" y="243.0" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">o texto</text>
+<line x1="1048" y1="228" x2="1074" y2="228" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<line x1="1224" y1="228" x2="1250" y2="228" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<line x1="1350" y1="228" x2="1366" y2="228" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<text x="928" y="296" font-size="13" fill="#334155" text-anchor="start" font-weight="400">• mesma chave combinada fora da rede (WhatsApp, pessoalmente…)</text>
+<text x="928" y="318" font-size="13" fill="#334155" text-anchor="start" font-weight="400">• chave errada ou Base64 lixo → não derruba o cliente</text>
+<line x1="622" y1="228" x2="680" y2="228" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<line x1="870" y1="238" x2="910" y2="238" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<text x="651" y="216" font-size="12" fill="#334155" text-anchor="middle" font-weight="400">TCP</text>
+<text x="890" y="226" font-size="12" fill="#334155" text-anchor="middle" font-weight="400">TCP</text>
+<circle cx="52" cy="392" r="17" fill="#1e3a8a"/>
+<text x="52" y="398" font-size="16" fill="#fff" text-anchor="middle" font-weight="700">2</text>
+<text x="82" y="398" font-size="22" fill="#0f172a" text-anchor="start" font-weight="700">Cifração de UM bloco de 16 bytes</text>
+<text x="482" y="398" font-size="14" fill="#64748b" text-anchor="start" font-weight="400">(AES-128 = 10 rodadas, modo ECB)</text>
+<rect x="30" y="420" width="400" height="500" rx="14" fill="#faf5ff" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="230" y="448" font-size="16" fill="#7c3aed" text-anchor="middle" font-weight="700">Expansão de chave  (_expandir_chave)</text>
+<rect x="60" y="462" width="340" height="52" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.6"/>
+<text x="230.0" y="483.0" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">Chave de 16 bytes</text>
+<text x="230.0" y="503.0" text-anchor="middle" font-size="12.5" fill="#475569">w[0] w[1] w[2] w[3]</text>
+<line x1="230" y1="514" x2="230" y2="540" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<rect x="60" y="540" width="340" height="64" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.6"/>
+<text x="230.0" y="567.0" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">para i = 4 … 43</text>
+<text x="230.0" y="587.0" text-anchor="middle" font-size="12.5" fill="#475569">w[i] = w[i-4] ⊕ temp</text>
+<line x1="230" y1="604" x2="230" y2="630" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<rect x="60" y="630" width="340" height="100" rx="10" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.6"/>
+<text x="230.0" y="675.0" text-anchor="middle" font-size="13" font-weight="600" fill="#0f172a">se i múltiplo de 4:</text>
+<text x="230.0" y="695.0" text-anchor="middle" font-size="13" font-weight="600" fill="#0f172a">temp = SubWord( RotWord( w[i-1] ) ) ⊕ Rcon</text>
+<text x="230" y="752" font-size="12.5" fill="#475569" text-anchor="middle" font-weight="400">RotWord: [a0 a1 a2 a3] → [a1 a2 a3 a0]</text>
+<text x="230" y="772" font-size="12.5" fill="#475569" text-anchor="middle" font-weight="400">SubWord: S-BOX em cada byte</text>
+<text x="230" y="792" font-size="12.5" fill="#475569" text-anchor="middle" font-weight="400">Rcon: 01 02 04 08 10 20 40 80 1B 36 (dobra em GF)</text>
+<line x1="230" y1="806" x2="230" y2="826" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<rect x="60" y="826" width="340" height="64" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.6"/>
+<text x="230.0" y="853.0" text-anchor="middle" font-size="14" font-weight="600" fill="#0f172a">w[0] … w[43]  =  11 chaves de rodada</text>
+<text x="230.0" y="873.0" text-anchor="middle" font-size="12.5" fill="#475569">rodada r usa w[4r] … w[4r+3]</text>
+<text x="230" y="910" font-size="12.5" fill="#7c3aed" text-anchor="middle" font-weight="700">→ k0 … k10 entram nos AddRoundKey</text>
+<text x="480" y="448" font-size="15" fill="#334155" text-anchor="start" font-weight="700">Estado: matriz 4×4, preenchida por coluna</text>
+<rect x="470" y="462" width="300" height="50" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.6"/>
+<text x="620.0" y="492.0" text-anchor="middle" font-size="14" font-weight="600" fill="#0f172a">Bloco de 16 bytes (texto claro)</text>
+<line x1="620" y1="512" x2="620" y2="536" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<rect x="470" y="536" width="300" height="50" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/>
+<text x="620.0" y="566.0" text-anchor="middle" font-size="14" font-weight="600" fill="#0f172a">AddRoundKey  (⊕ k0)</text>
+<line x1="620" y1="586" x2="620" y2="612" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<rect x="460" y="612" width="640" height="190" rx="14" fill="#fff7ed" stroke="#ea580c" stroke-width="1.6"/>
+<text x="480" y="638" font-size="16" fill="#ea580c" text-anchor="start" font-weight="700">Rodadas 1 a 9  (repete 9 vezes)</text>
+<rect x="480" y="656" width="130" height="90" rx="10" fill="#ffedd5" stroke="#ea580c" stroke-width="1.6"/>
+<text x="545.0" y="696.0" text-anchor="middle" font-size="14" font-weight="600" fill="#0f172a">SubBytes</text>
+<text x="545.0" y="716.0" text-anchor="middle" font-size="12.5" fill="#475569">cada byte → S-BOX</text>
+<line x1="610" y1="701" x2="640" y2="701" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<rect x="640" y="656" width="130" height="90" rx="10" fill="#ffedd5" stroke="#ea580c" stroke-width="1.6"/>
+<text x="705.0" y="696.0" text-anchor="middle" font-size="14" font-weight="600" fill="#0f172a">ShiftRows</text>
+<text x="705.0" y="716.0" text-anchor="middle" font-size="12.5" fill="#475569">linha l ← l casas</text>
+<line x1="770" y1="701" x2="800" y2="701" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<rect x="800" y="656" width="130" height="90" rx="10" fill="#ffedd5" stroke="#ea580c" stroke-width="1.6"/>
+<text x="865.0" y="696.0" text-anchor="middle" font-size="14" font-weight="600" fill="#0f172a">MixColumns</text>
+<text x="865.0" y="716.0" text-anchor="middle" font-size="12.5" fill="#475569">matriz × coluna</text>
+<line x1="930" y1="701" x2="960" y2="701" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<rect x="960" y="656" width="130" height="90" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/>
+<text x="1025.0" y="696.0" text-anchor="middle" font-size="14" font-weight="600" fill="#0f172a">AddRoundKey</text>
+<text x="1025.0" y="716.0" text-anchor="middle" font-size="12.5" fill="#475569">⊕ chave k(r)</text>
+<text x="780" y="782" font-size="12.5" fill="#64748b" text-anchor="middle" font-weight="400">o resultado volta ao início da rodada seguinte</text>
+<line x1="620" y1="802" x2="620" y2="836" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<rect x="460" y="836" width="640" height="130" rx="14" fill="#fef2f2" stroke="#dc2626" stroke-width="1.6"/>
+<text x="480" y="862" font-size="16" fill="#dc2626" text-anchor="start" font-weight="700">Rodada 10 (final)  —  SEM MixColumns</text>
+<rect x="480" y="876" width="170" height="70" rx="10" fill="#ffedd5" stroke="#ea580c" stroke-width="1.6"/>
+<text x="565.0" y="916.0" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">SubBytes</text>
+<rect x="690" y="876" width="170" height="70" rx="10" fill="#ffedd5" stroke="#ea580c" stroke-width="1.6"/>
+<text x="775.0" y="916.0" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">ShiftRows</text>
+<rect x="900" y="876" width="170" height="70" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/>
+<text x="985.0" y="916.0" text-anchor="middle" font-size="13" font-weight="600" fill="#0f172a">AddRoundKey ⊕ k10</text>
+<line x1="650" y1="911" x2="690" y2="911" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<line x1="860" y1="911" x2="900" y2="911" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<line x1="620" y1="966" x2="620" y2="990" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<rect x="470" y="990" width="300" height="48" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.6"/>
+<text x="620.0" y="1019.0" text-anchor="middle" font-size="14" font-weight="600" fill="#0f172a">Bloco cifrado (16 bytes)</text>
+<rect x="1130" y="420" width="340" height="580" rx="14" fill="#ffffff" stroke="#94a3b8" stroke-width="1.4"/>
+<text x="1300" y="448" font-size="15" fill="#0f172a" text-anchor="middle" font-weight="700">Por que cada etapa existe</text>
+<text x="1150" y="480" font-size="14" fill="#ea580c" text-anchor="start" font-weight="700">SubBytes</text>
+<text x="1150" y="500" font-size="13" fill="#334155" text-anchor="start" font-weight="400">confusão: quebra a linearidade</text>
+<text x="1150" y="518" font-size="12.5" fill="#64748b" text-anchor="start" font-weight="400">(inverso em GF(2⁸) + afim)</text>
+<text x="1150" y="562" font-size="14" fill="#ea580c" text-anchor="start" font-weight="700">ShiftRows</text>
+<text x="1150" y="582" font-size="13" fill="#334155" text-anchor="start" font-weight="400">difusão entre colunas</text>
+<text x="1150" y="600" font-size="12.5" fill="#64748b" text-anchor="start" font-weight="400">(cada byte muda de coluna)</text>
+<text x="1150" y="644" font-size="14" fill="#ea580c" text-anchor="start" font-weight="700">MixColumns</text>
+<text x="1150" y="664" font-size="13" fill="#334155" text-anchor="start" font-weight="400">difusão dentro da coluna</text>
+<text x="1150" y="682" font-size="12.5" fill="#64748b" text-anchor="start" font-weight="400">(1 byte afeta os 4 da coluna)</text>
+<text x="1150" y="726" font-size="14" fill="#ea580c" text-anchor="start" font-weight="700">AddRoundKey</text>
+<text x="1150" y="746" font-size="13" fill="#334155" text-anchor="start" font-weight="400">mistura a chave no estado</text>
+<text x="1150" y="764" font-size="12.5" fill="#64748b" text-anchor="start" font-weight="400">(única etapa que usa a chave)</text>
+<text x="1150" y="808" font-size="14" fill="#dc2626" text-anchor="start" font-weight="700">Sem MixColumns</text>
+<text x="1150" y="828" font-size="13" fill="#334155" text-anchor="start" font-weight="400">na rodada 10: não ganha segurança</text>
+<text x="1150" y="846" font-size="12.5" fill="#64748b" text-anchor="start" font-weight="400">e simplifica a decifração</text>
+<text x="1300" y="894" font-size="13" fill="#0f172a" text-anchor="middle" font-weight="700">Efeito avalanche: 1 bit muda</text>
+<text x="1300" y="914" font-size="13" fill="#0f172a" text-anchor="middle" font-weight="400">≈ metade do bloco (testado)</text>
+<circle cx="52" cy="1060" r="17" fill="#1e3a8a"/>
+<text x="52" y="1066" font-size="16" fill="#fff" text-anchor="middle" font-weight="700">3</text>
+<text x="82" y="1066" font-size="22" fill="#0f172a" text-anchor="start" font-weight="700">Decifração do bloco</text>
+<text x="326" y="1066" font-size="14" fill="#64748b" text-anchor="start" font-weight="400">(espelho da cifração: ordem invertida, chaves de k10 até k0)</text>
+<rect x="30" y="1090" width="170" height="70" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.6"/>
+<text x="115.0" y="1130.0" text-anchor="middle" font-size="15" font-weight="600" fill="#0f172a">Bloco cifrado</text>
+<rect x="230" y="1090" width="190" height="70" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/>
+<text x="325.0" y="1130.0" text-anchor="middle" font-size="14" font-weight="600" fill="#0f172a">AddRoundKey ⊕ k10</text>
+<rect x="450" y="1076" width="640" height="98" rx="14" fill="#fff7ed" stroke="#ea580c" stroke-width="1.6"/>
+<text x="466" y="1096" font-size="14" fill="#ea580c" text-anchor="start" font-weight="700">Rodadas 9 → 1</text>
+<rect x="466" y="1112" width="140" height="54" rx="10" fill="#ffedd5" stroke="#ea580c" stroke-width="1.6"/>
+<text x="536.0" y="1144.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#0f172a">InvShiftRows</text>
+<line x1="606" y1="1139" x2="626" y2="1139" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<rect x="626" y="1112" width="140" height="54" rx="10" fill="#ffedd5" stroke="#ea580c" stroke-width="1.6"/>
+<text x="696.0" y="1144.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#0f172a">InvSubBytes</text>
+<line x1="766" y1="1139" x2="786" y2="1139" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<rect x="786" y="1112" width="140" height="54" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/>
+<text x="856.0" y="1144.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#0f172a">AddRoundKey k(r)</text>
+<line x1="926" y1="1139" x2="946" y2="1139" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<rect x="946" y="1112" width="140" height="54" rx="10" fill="#ffedd5" stroke="#ea580c" stroke-width="1.6"/>
+<text x="1016.0" y="1144.0" text-anchor="middle" font-size="12.5" font-weight="600" fill="#0f172a">InvMixColumns</text>
+<rect x="1130" y="1090" width="340" height="70" rx="10" fill="#fee2e2" stroke="#dc2626" stroke-width="1.6"/>
+<text x="1300.0" y="1120.0" text-anchor="middle" font-size="13" font-weight="600" fill="#0f172a">InvShiftRows → InvSubBytes → ⊕ k0</text>
+<text x="1300.0" y="1140.0" text-anchor="middle" font-size="12.5" fill="#475569">final: SEM InvMixColumns</text>
+<line x1="200" y1="1125" x2="230" y2="1125" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<line x1="420" y1="1125" x2="450" y2="1125" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<line x1="1090" y1="1125" x2="1130" y2="1125" stroke="#334155" stroke-width="2" marker-end="url(#a)"/>
+<text x="30" y="1200" font-size="13" fill="#334155" text-anchor="start" font-weight="400">InvShiftRows: linha l ← l casas à direita   ·   InvSubBytes: S-BOX inversa   ·   InvMixColumns: matriz inversa 0E 0B 0D 09 (em GF(2⁸))</text>
+<text x="30" y="1220" font-size="13" fill="#dc2626" text-anchor="start" font-weight="400">Cuidado clássico: na decifração o InvMixColumns vem DEPOIS do AddRoundKey (na cifração o MixColumns vem antes).</text>
+<circle cx="52" cy="1262" r="17" fill="#1e3a8a"/>
+<text x="52" y="1268" font-size="16" fill="#fff" text-anchor="middle" font-weight="700">4</text>
+<text x="82" y="1268" font-size="22" fill="#0f172a" text-anchor="start" font-weight="700">Matemática bit a bit por baixo de tudo</text>
+<text x="554" y="1268" font-size="14" fill="#64748b" text-anchor="start" font-weight="400">(GF(2⁸) com polinômio x⁸+x⁴+x³+x+1 = 0x11B)</text>
+<rect x="30" y="1292" width="450" height="220" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/>
+<text x="255" y="1318" font-size="15" fill="#16a34a" text-anchor="middle" font-weight="700">_xtime(b)  =  b × 0x02</text>
+<text x="50" y="1346" font-size="13.5" fill="#334155" text-anchor="start" font-weight="400">1) desloca 1 bit à esquerda</text>
+<text x="50" y="1368" font-size="13.5" fill="#334155" text-anchor="start" font-weight="400">2) se o bit 7 era 1: XOR com 0x1B</text>
+<text x="50" y="1400" font-size="13" fill="#0f172a" text-anchor="start" font-weight="400">0x57 → 0xAE            (sem estouro)</text>
+<text x="50" y="1422" font-size="13" fill="#0f172a" text-anchor="start" font-weight="400">0xAE → 0x47            (estourou: ⊕ 0x1B)</text>
+<text x="50" y="1456" font-size="13.5" fill="#334155" text-anchor="start" font-weight="400">_mult_gf(a,b): para cada bit ligado de b,</text>
+<text x="50" y="1476" font-size="13.5" fill="#334155" text-anchor="start" font-weight="400">soma (XOR) o a atual; depois a ← xtime(a)</text>
+<text x="50" y="1500" font-size="13" fill="#0f172a" text-anchor="start" font-weight="400">0x57 · 0x13 = 0xFE   (FIPS-197 §4.2.1)</text>
+<rect x="510" y="1292" width="450" height="220" rx="10" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.6"/>
+<text x="735" y="1318" font-size="15" fill="#ca8a04" text-anchor="middle" font-weight="700">S-BOX calculada, não decorada</text>
+<text x="530" y="1346" font-size="13.5" fill="#334155" text-anchor="start" font-weight="400">1) b⁻¹ em GF(2⁸)   (inverso de 0 = 0)</text>
+<text x="530" y="1368" font-size="13.5" fill="#334155" text-anchor="start" font-weight="400">2) afim: b'ᵢ = bᵢ ⊕ bᵢ₊₄ ⊕ bᵢ₊₅ ⊕ bᵢ₊₆ ⊕ bᵢ₊₇ ⊕ cᵢ</text>
+<text x="530" y="1390" font-size="13.5" fill="#334155" text-anchor="start" font-weight="400">    com c = 0x63, índices módulo 8</text>
+<text x="530" y="1424" font-size="13" fill="#0f172a" text-anchor="start" font-weight="400">S(00)=63   S(01)=7C   S(53)=ED</text>
+<text x="530" y="1458" font-size="13.5" fill="#334155" text-anchor="start" font-weight="400">S-BOX inversa = tabela lida de trás para frente</text>
+<text x="530" y="1486" font-size="13.5" fill="#334155" text-anchor="start" font-weight="400">Rcon: 01, dobra por xtime a cada rodada</text>
+<rect x="990" y="1292" width="480" height="220" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.6"/>
+<text x="1230" y="1318" font-size="15" fill="#7c3aed" text-anchor="middle" font-weight="700">MixColumns: coluna × matriz fixa</text>
+<text x="1090" y="1356" font-size="15" fill="#0f172a" text-anchor="middle" font-weight="400">│ 02 03 01 01 │</text>
+<text x="1090" y="1380" font-size="15" fill="#0f172a" text-anchor="middle" font-weight="400">│ 01 02 03 01 │</text>
+<text x="1090" y="1404" font-size="15" fill="#0f172a" text-anchor="middle" font-weight="400">│ 01 01 02 03 │</text>
+<text x="1090" y="1428" font-size="15" fill="#0f172a" text-anchor="middle" font-weight="400">│ 03 01 01 02 │</text>
+<text x="1170" y="1392" font-size="14" fill="#0f172a" text-anchor="start" font-weight="400">·  [s0 s1 s2 s3]ᵀ</text>
+<text x="1010" y="1470" font-size="13.5" fill="#334155" text-anchor="start" font-weight="400">s'0 = 02·s0 ⊕ 03·s1 ⊕ 01·s2 ⊕ 01·s3</text>
+<text x="1010" y="1494" font-size="13.5" fill="#0f172a" text-anchor="start" font-weight="400">ex.: coluna db 13 53 45 → 8e 4d a1 bc</text>
+<text x="750.0" y="1542" font-size="13.5" fill="#64748b" text-anchor="middle" font-weight="400">Validado contra os vetores oficiais do FIPS-197 (A.1, B, C.1) e conferível em https://simewu.com/aes/</text>
+</svg>

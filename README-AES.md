@@ -20,6 +20,12 @@
 
 ---
 
+![Fluxo de funcionamento do AES-128 no chat](docs/imagens/aes-fluxo.png)
+
+*Fluxo completo: caminho da mensagem no chat, cifração e decifração de um bloco e a matemática em GF(2⁸). Versão vetorial: [aes-fluxo.svg](docs/imagens/aes-fluxo.svg).*
+
+---
+
 ## 1. Visão geral
 
 | Parâmetro | AES-128 |

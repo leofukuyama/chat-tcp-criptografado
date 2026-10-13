@@ -2,16 +2,28 @@
 Testes isolados da Cifra AES-128 -- sem envolver rede, socket ou o chat.
 Rodar com: python tests/test_aes.py  (a partir da raiz do projeto)
 
-Os vetores vem do FIPS-197 (o documento oficial do AES):
-  - Apendice A.1: expansao da chave 2b7e1516 28aed2a6 abf71588 09cf4f3c
-  - Apendice B:   cifragem de 3243f6a8 885a308d 313198a2 e0370734, com o
-                  estado depois de cada etapa das rodadas
-  - Apendice C.1: chave 000102...0f, texto claro 00112233...ff
+Os vetores vem de duas fontes:
+
+  1. Os slides da aula ("AULA AES.pdf"), que o codigo segue passo a passo:
+     - SubBytes pela tabela S-box (linha = digito da esquerda, coluna = digito
+       da direita) e a S-box inversa;
+     - multiplicacao por 02 = deslocar 1 bit a esquerda e, se o bit que saiu
+       era 1, XOR com 1B; multiplicacao por 03 = (x * 02) XOR x;
+     - InvMixColumns com 0E/0B/0D/09 montados a partir dos multiplos 02, 04 e
+       08 do byte, escolhidos pelos bits da constante;
+     - expansao de chave (RotWord, SubWord, Rcon) com a chave
+       0f 15 71 c9 47 d9 e8 59 0c b7 ad d6 af 7f 67 98.
+  2. O FIPS-197 (o documento oficial do AES), que confere o algoritmo inteiro:
+     - Apendice A.1: expansao da chave 2b7e1516 28aed2a6 abf71588 09cf4f3c
+     - Apendice B:   cifragem de 3243f6a8 885a308d 313198a2 e0370734, com o
+                     estado depois de cada etapa das rodadas
+     - Apendice C.1: chave 000102...0f, texto claro 00112233...ff
 Alem deles, ha testes dirigidos aos erros mais comuns ao implementar o
 AES (ver teste_erro_* e teste_rastro_*).
 """
 
 import base64
+import hashlib
 import os
 import random
 import re
@@ -32,82 +44,147 @@ CHAVE_C1 = bytes.fromhex("000102030405060708090a0b0c0d0e0f")      # Apendice C.1
 CLARO_C1 = bytes.fromhex("00112233445566778899aabbccddeeff")
 CIFRADO_C1 = bytes.fromhex("69c4e0d86a7b0430d8cdb78070b4c55a")
 
+# --- Chave usada nos slides de expansao de chave ---------------------------
+CHAVE_AULA = bytes.fromhex("0f1571c947d9e8590cb7add6af7f6798")
+
 
 def _palavra_hex(palavra: list[int]) -> str:
     return bytes(palavra).hex()
 
 
 # ============================================================
-# GF(2^8): XTIME E MULTIPLICACAO
+# MULTIPLICACAO DE BYTES (como na aula: deslocar e fazer XOR)
 # ============================================================
 
-def teste_xtime_exemplos_do_fips():
-    # FIPS-197 secao 4.2.1: 57 -> AE -> 47 -> 8E -> 07 (so o 2o estoura).
-    assert aes._xtime(0x57) == 0xAE
-    assert aes._xtime(0xAE) == 0x47
-    assert aes._xtime(0x47) == 0x8E
-    assert aes._xtime(0x8E) == 0x07
+def teste_multiplicar_por_2_sem_correcao_quando_o_primeiro_bit_e_0():
+    # Slide: 02 x 47 -> 0100 0111 desloca para 1000 1110 = 8E (sem XOR com 1B).
+    assert aes._multiplicar_por_2(0x47) == 0x8E
+    assert aes._multiplicar_por_2(0x7F) == 0xFE
 
 
-def teste_xtime_so_estoura_com_bit_7():
-    # Sem bit 7: e' um deslocamento puro. Com bit 7: desloca e XOR 0x1B.
-    assert aes._xtime(0x7F) == 0xFE
-    assert aes._xtime(0x80) == 0x1B
-    assert aes._xtime(0xFF) == 0xE5
+def teste_multiplicar_por_2_com_correcao_1b_quando_o_primeiro_bit_e_1():
+    # Slide: 02 x 8E -> 1 0001 1100, descarta o 9o bit (1C), XOR com 1B = 07.
+    assert aes._multiplicar_por_2(0x8E) == 0x07
+    assert aes._multiplicar_por_2(0x80) == 0x1B
+    assert aes._multiplicar_por_2(0xFF) == 0xE5
+    # Exercicio de MixColumns do slide: 2*FC = E3 e 2*E4 = D3.
+    assert aes._multiplicar_por_2(0xFC) == 0xE3
+    assert aes._multiplicar_por_2(0xE4) == 0xD3
+    # Primeiro termo de S00 do slide: 2*87 (0E XOR 1B = 15).
+    assert aes._multiplicar_por_2(0x87) == 0x15
 
 
-def teste_mult_gf_exemplos_do_fips():
-    assert aes._mult_gf(0x57, 0x83) == 0xC1   # FIPS-197 secao 4.2
-    assert aes._mult_gf(0x57, 0x13) == 0xFE   # FIPS-197 secao 4.2.1
+def teste_multiplicar_por_3_e_o_dobro_xor_o_proprio_byte():
+    # Slide: 03 x 6E = (6E << 1) XOR 6E = DC XOR 6E = B2;  03 x E4 = D3 XOR E4 = 37.
+    assert aes._multiplicar(0x03, 0x6E) == 0xB2
+    assert aes._multiplicar(0x03, 0xE4) == 0x37
+    for byte in range(256):
+        assert aes._multiplicar(0x03, byte) == aes._multiplicar_por_2(byte) ^ byte
 
 
-def teste_mult_gf_propriedades():
-    for a in range(256):
-        assert aes._mult_gf(a, 0) == 0
-        assert aes._mult_gf(a, 1) == a
-        assert aes._mult_gf(a, 2) == aes._xtime(a)
-    rng = random.Random(1)
-    for _ in range(300):
-        a, b, c = rng.randrange(256), rng.randrange(256), rng.randrange(256)
-        assert aes._mult_gf(a, b) == aes._mult_gf(b, a)                       # comutativa
-        assert aes._mult_gf(a, b ^ c) == aes._mult_gf(a, b) ^ aes._mult_gf(a, c)  # distributiva
+def teste_multiplicar_por_01_e_por_02_sao_o_proprio_byte_e_o_dobro():
+    for byte in range(256):
+        assert aes._multiplicar(0x01, byte) == byte
+        assert aes._multiplicar(0x02, byte) == aes._multiplicar_por_2(byte)
 
 
-def teste_inverso_gf():
-    assert aes._inverso_gf(0) == 0          # convencao do AES
-    assert aes._inverso_gf(0x53) == 0xCA    # FIPS-197 secao 5.1.1
-    for byte in range(1, 256):
-        assert aes._mult_gf(byte, aes._inverso_gf(byte)) == 1, hex(byte)
+def teste_multiplos_de_47_por_02_04_e_08_da_aula():
+    # Slide: cada multiplo reaproveita o anterior (02 x 47 = 8E, 04 x 47 = 07, 08 x 47 = 0E).
+    assert aes._multiplicar(0x02, 0x47) == 0x8E
+    assert aes._multiplicar(0x04, 0x47) == 0x07
+    assert aes._multiplicar(0x08, 0x47) == 0x0E
+
+
+def teste_multiplicar_pelas_constantes_do_inv_mix_columns_da_aula():
+    # Os bits da constante dizem quais multiplos entram no XOR:
+    #   0E = 08,04,02   0B = 08,02,01   0D = 08,04,01   09 = 08,01
+    # (constante, byte, produto) tirados dos slides, coluna 47 37 94 ED e S01.
+    casos = [
+        (0x0E, 0x47, 0x87), (0x0B, 0x37, 0xFA), (0x0D, 0x94, 0x3E), (0x09, 0xED, 0xC4),  # S00
+        (0x09, 0x47, 0x49), (0x0E, 0x37, 0x11), (0x0B, 0x94, 0x6B), (0x0D, 0xED, 0x5D),  # 2a linha
+        (0x0D, 0x47, 0x4E), (0x09, 0x37, 0x94), (0x0E, 0x94, 0x99), (0x0B, 0xED, 0x05),  # 3a linha
+        (0x0B, 0x47, 0xC7), (0x0D, 0x37, 0x48), (0x09, 0x94, 0x58), (0x0E, 0xED, 0x71),  # 4a linha
+        (0x0E, 0x40, 0xAD), (0x0B, 0xD4, 0x9D), (0x0D, 0xE4, 0x38), (0x09, 0xA5, 0xFA),  # S01
+    ]
+    for constante, byte, esperado in casos:
+        obtido = aes._multiplicar(constante, byte)
+        assert obtido == esperado, f"{constante:02X} x {byte:02X} = {obtido:02X}, esperado {esperado:02X}"
+
+
+def teste_multiplicar_rejeita_constante_com_mais_de_4_bits():
+    # So existem as constantes 01..0F nas matrizes do MixColumns/InvMixColumns;
+    # acima disso o metodo dos multiplos 01/02/04/08 deixaria bits de fora.
+    for constante in (0x10, 0x1B, 0xFF):
+        try:
+            aes._multiplicar(constante, 0x01)
+        except ValueError:
+            continue
+        raise AssertionError(f"constante {constante:#04x} deveria ser rejeitada")
 
 
 # ============================================================
-# S-BOX E RCON
+# S-BOX (TABELA 16x16) E RCON
 # ============================================================
 
-def teste_sbox_valores_conhecidos():
-    assert aes.SBOX[0x00] == 0x63
-    assert aes.SBOX[0x01] == 0x7C
-    assert aes.SBOX[0x53] == 0xED     # exemplo da secao 5.1.1
-    assert aes.SBOX[0xFF] == 0x16
-    assert aes.SBOX[0x10] == 0xCA
+# Linhas da Tabela 5.2 dos slides, copiadas dali: x = linha, y = coluna.
+SBOX_LINHA_0 = [0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76]
+SBOX_LINHA_8 = [0xCD, 0x0C, 0x13, 0xEC, 0x5F, 0x97, 0x44, 0x17, 0xC4, 0xA7, 0x7E, 0x3D, 0x64, 0x5D, 0x19, 0x73]
+SBOX_LINHA_F = [0x8C, 0xA1, 0x89, 0x0D, 0xBF, 0xE6, 0x42, 0x68, 0x41, 0x99, 0x2D, 0x0F, 0xB0, 0x54, 0xBB, 0x16]
+SBOX_INV_LINHA_0 = [0x52, 0x09, 0x6A, 0xD5, 0x30, 0x36, 0xA5, 0x38, 0xBF, 0x40, 0xA3, 0x9E, 0x81, 0xF3, 0xD7, 0xFB]
+SBOX_INV_LINHA_F = [0x17, 0x2B, 0x04, 0x7E, 0xBA, 0x77, 0xD6, 0x26, 0xE1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0C, 0x7D]
+
+
+def _achatar(tabela: list[list[int]]) -> bytes:
+    return bytes(valor for linha in tabela for valor in linha)
+
+
+def teste_sbox_e_sbox_inversa_sao_tabelas_16_por_16():
+    for tabela in (aes.SBOX, aes.SBOX_INV):
+        assert len(tabela) == 16
+        assert all(len(linha) == 16 for linha in tabela)
+        assert all(0 <= valor <= 255 for linha in tabela for valor in linha)
+
+
+def teste_sbox_busca_a_linha_pela_esquerda_e_a_coluna_pela_direita():
+    # Byte 53: linha 5, coluna 3 -> ED (exemplo do FIPS-197, secao 5.1.1).
+    assert aes.SBOX[0x5][0x3] == 0xED
+    assert aes._substituir_byte(0x53, aes.SBOX) == 0xED
+    assert aes._substituir_byte(0x00, aes.SBOX) == 0x63
+    assert aes._substituir_byte(0xFF, aes.SBOX) == 0x16
+    # 0x10 = linha 1, coluna 0 -> CA (trocar linha por coluna daria 7C).
+    assert aes._substituir_byte(0x10, aes.SBOX) == 0xCA
+    assert aes._substituir_byte(0x63, aes.SBOX_INV) == 0x00
+
+
+def teste_sbox_confere_com_as_linhas_dos_slides():
+    assert aes.SBOX[0x0] == SBOX_LINHA_0
+    assert aes.SBOX[0x8] == SBOX_LINHA_8
+    assert aes.SBOX[0xF] == SBOX_LINHA_F
+    assert aes.SBOX_INV[0x0] == SBOX_INV_LINHA_0
+    assert aes.SBOX_INV[0xF] == SBOX_INV_LINHA_F
 
 
 def teste_sbox_e_bijecao_e_inversa_confere():
-    assert sorted(aes.SBOX) == list(range(256))
-    for b in range(256):
-        assert aes.SBOX_INV[aes.SBOX[b]] == b
-        assert aes.SBOX[aes.SBOX_INV[b]] == b
-    assert aes.SBOX_INV[0x63] == 0x00
+    assert sorted(_achatar(aes.SBOX)) == list(range(256))
+    assert sorted(_achatar(aes.SBOX_INV)) == list(range(256))
+    for byte in range(256):
+        trocado = aes._substituir_byte(byte, aes.SBOX)
+        assert aes._substituir_byte(trocado, aes.SBOX_INV) == byte
+        trocado = aes._substituir_byte(byte, aes.SBOX_INV)
+        assert aes._substituir_byte(trocado, aes.SBOX) == byte
 
 
-def teste_sbox_sem_pontos_fixos():
-    # Propriedade de projeto do AES: S(b) != b e S(b) != ~b para todo b.
-    for b in range(256):
-        assert aes.SBOX[b] != b
-        assert aes.SBOX[b] != b ^ 0xFF
+def teste_sbox_tabelas_completas_conferem_com_as_do_fips():
+    # Guarda contra erro de digitacao nas 512 entradas: impressao digital
+    # (SHA-256) das tabelas oficiais do FIPS-197 (Figuras 7 e 14).
+    assert hashlib.sha256(_achatar(aes.SBOX)).hexdigest() == (
+        "c2d8e5eed6cbebd8625fc18f81486a7733c04f9b0129ffbe974c68b90308b4f2")
+    assert hashlib.sha256(_achatar(aes.SBOX_INV)).hexdigest() == (
+        "93631b0726f6fe6629daa743ee51b49f4477ed07391b68eeea0672a4a90018aa")
 
 
-def teste_rcon_dobra_em_gf():
+def teste_rcon_valores_da_aula():
+    # Slide da tabela de chaves: Rcon(1) = 01, Rcon(2) = 02, ... Rcon(9) = 1B, Rcon(10) = 36.
     assert aes.RCON[1:] == [0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36]
 
 
@@ -139,6 +216,62 @@ def teste_expansao_chave_fips_a1_passos_intermediarios_w4():
     assert _palavra_hex(substituida) == "8a84eb01"
     substituida[0] ^= aes.RCON[1]
     assert _palavra_hex(substituida) == "8b84eb01"
+
+
+def teste_rot_word_e_sub_word_exemplos_da_aula():
+    # Slides: RotWord(7F 8D 29 2F) = 8D 29 2F 7F; SubWord(8D 29 2F 7F) = 5D A5 15 D2.
+    assert aes._rot_word([0x7F, 0x8D, 0x29, 0x2F]) == [0x8D, 0x29, 0x2F, 0x7F]
+    assert aes._sub_word([0x8D, 0x29, 0x2F, 0x7F]) == [0x5D, 0xA5, 0x15, 0xD2]
+    # Slide do Rcon: 5D A5 15 D2 XOR 1B 00 00 00 = 46 A5 15 D2.
+    assert _palavra_hex([0x5D ^ 0x1B, 0xA5, 0x15, 0xD2]) == "46a515d2"
+
+
+def teste_expansao_chave_da_aula_passo_a_passo():
+    # Slides "Chave de rodada": chave 0f 15 71 c9 | 47 d9 e8 59 | 0c b7 ad d6 | af 7f 67 98.
+    w = aes._expandir_chave(CHAVE_AULA)
+    # i = 4: temp = w3 = af 7f 67 98 -> RotWord 7f 67 98 af -> SubWord d2 85 46 79
+    #        -> XOR Rcon(1) = 01 00 00 00 -> d3 85 46 79 -> w4 = w0 XOR temp.
+    rodada = aes._rot_word(w[3])
+    assert _palavra_hex(rodada) == "7f6798af"
+    substituida = aes._sub_word(rodada)
+    assert _palavra_hex(substituida) == "d2854679"
+    substituida[0] ^= aes.RCON[4 // 4]
+    assert _palavra_hex(substituida) == "d3854679"
+    assert _palavra_hex(w[4]) == "dc9037b0"
+    # i = 5, 6, 7: i mod 4 != 0, so w[i] = w[i-4] XOR w[i-1].
+    assert _palavra_hex(w[5]) == "9b49dfe9"
+    assert _palavra_hex(w[6]) == "97fe723f"
+    assert _palavra_hex(w[7]) == "388115a7"
+    # i = 8: temp = w7 = 38 81 15 a7 -> RotWord 81 15 a7 38 -> SubWord 0c 59 5c 07
+    #        -> XOR Rcon(2) = 02 00 00 00 -> 0e 59 5c 07 -> w8 = w4 XOR temp.
+    rodada = aes._rot_word(w[7])
+    assert _palavra_hex(rodada) == "8115a738"
+    substituida = aes._sub_word(rodada)
+    assert _palavra_hex(substituida) == "0c595c07"
+    substituida[0] ^= aes.RCON[8 // 4]
+    assert _palavra_hex(substituida) == "0e595c07"
+    assert _palavra_hex(w[8]) == "d2c96bb7"
+
+
+def teste_expansao_chave_da_aula_palavras_finais_da_tabela():
+    # Tabela do slide "Seguindo o algoritmo teremos as 44 palavras de 32 bits".
+    # (w35 esta com um digito a menos no slide; o RotWord(w35) ao lado mostra be 0b 38 3c.)
+    w = aes._expandir_chave(CHAVE_AULA)
+    assert len(w) == 44
+    esperado = {
+        28: "37149348", 29: "bb3de7f7", 30: "38d808a5", 31: "f77da14a",
+        32: "48264520", 33: "f31ba2d7", 34: "cbc3aa72", 35: "3cbe0b38",
+        36: "fd0d42cb", 37: "0e16e01c", 38: "c5d54a6e", 39: "f96b4156",
+        40: "b48ef352", 41: "ba98134e", 42: "7f4d5920", 43: "86261876",
+    }
+    for indice, hexa in esperado.items():
+        assert _palavra_hex(w[indice]) == hexa, f"w[{indice}]={_palavra_hex(w[indice])}"
+    # Slide "matriz preenchida por colunas": w0 vira a 1a coluna 0f 15 71 c9.
+    k0 = aes._chave_da_rodada(w, 0)
+    assert [k0[linha][0] for linha in range(4)] == [0x0F, 0x15, 0x71, 0xC9]
+    assert [k0[0][coluna] for coluna in range(4)] == [0x0F, 0x47, 0x0C, 0xAF]
+    k1 = aes._chave_da_rodada(w, 1)
+    assert [k1[linha][0] for linha in range(4)] == [0xDC, 0x90, 0x37, 0xB0]
 
 
 def teste_expansao_chave_primeiras_palavras_sao_a_propria_chave():
@@ -222,6 +355,56 @@ def teste_mix_columns_exemplo_fips_b_estado_inteiro():
     assert aes._estado_para_bytes(aes._mix_columns(estado)) == esperado
 
 
+# Estado dos slides de MixColumns / InvMixColumns, linha por linha:
+# a entrada do MixColumns e a entrada do InvMixColumns sao pares exatos.
+ESTADO_ANTES_DO_MIX = [
+    [0x87, 0xF2, 0x4D, 0x97],
+    [0x6E, 0x4C, 0x90, 0xEC],
+    [0x46, 0xE7, 0x4A, 0xC3],
+    [0xA6, 0x8C, 0xD8, 0x95],
+]
+ESTADO_DEPOIS_DO_MIX = [
+    [0x47, 0x40, 0xA3, 0x4C],
+    [0x37, 0xD4, 0x70, 0x9F],
+    [0x94, 0xE4, 0x3A, 0x42],
+    [0xED, 0xA5, 0xA6, 0xBC],
+]
+
+
+def teste_mix_columns_primeiros_bytes_do_slide():
+    # S00 = (2*87) XOR (3*6E) XOR 46 XOR A6 = 15 XOR B2 XOR 46 XOR A6 = 47
+    coluna_0 = [0x87, 0x6E, 0x46, 0xA6]
+    assert aes._multiplicar_coluna(aes.MATRIZ_MIX, coluna_0)[0] == 0x47
+    assert (aes._multiplicar(0x02, 0x87) ^ aes._multiplicar(0x03, 0x6E) ^ 0x46 ^ 0xA6) == 0x47
+    # S01 = (2*F2) XOR (3*4C) XOR E7 XOR 8C = 40
+    coluna_1 = [0xF2, 0x4C, 0xE7, 0x8C]
+    assert aes._multiplicar_coluna(aes.MATRIZ_MIX, coluna_1)[0] == 0x40
+
+
+def teste_mix_columns_exercicio_do_slide_coluna_8b_7f_fc_e4():
+    # Exercicio: 3a linha da matriz (01 01 02 03) sobre a coluna 8b 7f fc e4:
+    # 8b XOR 7f XOR (2*fc) XOR (3*e4) = 8b XOR 7f XOR e3 XOR 37 = 20.
+    coluna = [0x8B, 0x7F, 0xFC, 0xE4]
+    assert aes._multiplicar_coluna(aes.MATRIZ_MIX, coluna)[2] == 0x20
+
+
+def teste_mix_columns_estado_inteiro_do_slide():
+    assert aes._mix_columns(ESTADO_ANTES_DO_MIX) == ESTADO_DEPOIS_DO_MIX
+
+
+def teste_inv_mix_columns_estado_inteiro_do_slide():
+    # "A matriz original recuperada": 47 40 A3 4C / ... -> 87 F2 4D 97 / ...
+    assert aes._inv_mix_columns(ESTADO_DEPOIS_DO_MIX) == ESTADO_ANTES_DO_MIX
+
+
+def teste_inv_mix_columns_primeira_coluna_do_slide():
+    # Coluna 47 37 94 ED -> 87 6E 46 A6 (S00 = 87, depois 6E, 46 e A6).
+    coluna = [0x47, 0x37, 0x94, 0xED]
+    assert aes._multiplicar_coluna(aes.MATRIZ_MIX_INV, coluna) == [0x87, 0x6E, 0x46, 0xA6]
+    assert (aes._multiplicar(0x0E, 0x47) ^ aes._multiplicar(0x0B, 0x37)
+            ^ aes._multiplicar(0x0D, 0x94) ^ aes._multiplicar(0x09, 0xED)) == 0x87
+
+
 def teste_inv_mix_columns_desfaz_mix_columns():
     rng = random.Random(7)
     for _ in range(100):
@@ -232,13 +415,21 @@ def teste_inv_mix_columns_desfaz_mix_columns():
 
 
 def teste_matrizes_mix_sao_inversas_entre_si():
-    # Produto das duas matrizes em GF(2^8) deve ser a identidade.
+    # Produto das duas matrizes (multiplicando como na aula e somando com
+    # XOR) deve ser a identidade.
     for i in range(4):
         for j in range(4):
             soma = 0
             for k in range(4):
-                soma ^= aes._mult_gf(aes.MATRIZ_MIX[i][k], aes.MATRIZ_MIX_INV[k][j])
+                soma ^= aes._multiplicar(aes.MATRIZ_MIX[i][k], aes.MATRIZ_MIX_INV[k][j])
             assert soma == (1 if i == j else 0), (i, j)
+
+
+def teste_add_round_key_exemplo_do_slide():
+    # Slide: 47 XOR AC = EB (0100 0111 XOR 1010 1100 = 1110 1011).
+    estado = [[0x47, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]
+    chave = [[0xAC, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]
+    assert aes._add_round_key(estado, chave)[0][0] == 0xEB
 
 
 def teste_add_round_key_e_propria_inversa():
@@ -528,17 +719,24 @@ def teste_registro_expoe_aes_na_opcao_8():
 
 
 TESTES = [
-    teste_xtime_exemplos_do_fips,
-    teste_xtime_so_estoura_com_bit_7,
-    teste_mult_gf_exemplos_do_fips,
-    teste_mult_gf_propriedades,
-    teste_inverso_gf,
-    teste_sbox_valores_conhecidos,
+    teste_multiplicar_por_2_sem_correcao_quando_o_primeiro_bit_e_0,
+    teste_multiplicar_por_2_com_correcao_1b_quando_o_primeiro_bit_e_1,
+    teste_multiplicar_por_3_e_o_dobro_xor_o_proprio_byte,
+    teste_multiplicar_por_01_e_por_02_sao_o_proprio_byte_e_o_dobro,
+    teste_multiplos_de_47_por_02_04_e_08_da_aula,
+    teste_multiplicar_pelas_constantes_do_inv_mix_columns_da_aula,
+    teste_multiplicar_rejeita_constante_com_mais_de_4_bits,
+    teste_sbox_e_sbox_inversa_sao_tabelas_16_por_16,
+    teste_sbox_busca_a_linha_pela_esquerda_e_a_coluna_pela_direita,
+    teste_sbox_confere_com_as_linhas_dos_slides,
     teste_sbox_e_bijecao_e_inversa_confere,
-    teste_sbox_sem_pontos_fixos,
-    teste_rcon_dobra_em_gf,
+    teste_sbox_tabelas_completas_conferem_com_as_do_fips,
+    teste_rcon_valores_da_aula,
     teste_expansao_chave_fips_a1_palavras_chave,
     teste_expansao_chave_fips_a1_passos_intermediarios_w4,
+    teste_rot_word_e_sub_word_exemplos_da_aula,
+    teste_expansao_chave_da_aula_passo_a_passo,
+    teste_expansao_chave_da_aula_palavras_finais_da_tabela,
     teste_expansao_chave_primeiras_palavras_sao_a_propria_chave,
     teste_chave_da_rodada_monta_matriz_por_coluna,
     teste_expansao_chave_exige_16_bytes,
@@ -548,8 +746,14 @@ TESTES = [
     teste_sub_bytes_e_inversa,
     teste_mix_columns_vetores_conhecidos,
     teste_mix_columns_exemplo_fips_b_estado_inteiro,
+    teste_mix_columns_primeiros_bytes_do_slide,
+    teste_mix_columns_exercicio_do_slide_coluna_8b_7f_fc_e4,
+    teste_mix_columns_estado_inteiro_do_slide,
+    teste_inv_mix_columns_estado_inteiro_do_slide,
+    teste_inv_mix_columns_primeira_coluna_do_slide,
     teste_inv_mix_columns_desfaz_mix_columns,
     teste_matrizes_mix_sao_inversas_entre_si,
+    teste_add_round_key_exemplo_do_slide,
     teste_add_round_key_e_propria_inversa,
     teste_bloco_fips_c1,
     teste_bloco_fips_apendice_b,

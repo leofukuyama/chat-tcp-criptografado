@@ -1,7 +1,7 @@
 """
 Cifra de bloco AES-128 (Advanced Encryption Standard, FIPS-197), implementada
-do zero, sem nenhuma biblioteca de criptografia, seguindo o mesmo padrao
-didatico de cifras/des.py.
+do zero, sem nenhuma biblioteca de criptografia, seguindo passo a passo o que
+foi visto na aula (slides "AES") e no mesmo estilo didatico das demais cifras.
 
 O AES NAO e' uma rede de Feistel (como o DES): e' uma rede de
 SUBSTITUICAO-PERMUTACAO. Em toda rodada o bloco inteiro (16 bytes) e'
@@ -10,7 +10,7 @@ chamada ESTADO, e cada rodada aplica 4 operacoes:
 
     SubBytes     -> substitui cada byte pela S-BOX            (confusao)
     ShiftRows    -> desloca as linhas da matriz               (difusao)
-    MixColumns   -> mistura os 4 bytes de cada coluna (GF)    (difusao)
+    MixColumns   -> mistura os 4 bytes de cada coluna         (difusao)
     AddRoundKey  -> XOR do estado com a chave da rodada
 
 Parametros do AES-128: bloco de 128 bits (16 bytes), chave de 128 bits
@@ -23,14 +23,18 @@ Fluxo completo de um bloco:
     rodada 10    : SubBytes -> ShiftRows ->              AddRoundKey
                    (a ultima rodada NAO tem MixColumns!)
 
-Tudo aqui e' feito BIT A BIT / BYTE A BYTE, de forma visivel:
-  - a aritmetica de GF(2^8) (xtime, multiplicacao) usa deslocamentos e XOR
-    explicitos, entao da para acompanhar cada produto de hexadecimais;
-  - a S-BOX NAO e' uma tabela decorada: e' CALCULADA (inverso multiplicativo
-    em GF(2^8) + transformacao afim), do mesmo jeito que o FIPS-197 define;
-  - o Rcon tambem e' calculado (dobrando em GF(2^8)), nao digitado.
+Tudo aqui usa so as ferramentas apresentadas na aula:
+  - SubBytes e' uma BUSCA NA TABELA S-box (o digito hexadecimal da esquerda
+    escolhe a linha, o da direita escolhe a coluna); InvSubBytes faz o mesmo
+    na S-box inversa;
+  - MixColumns e InvMixColumns multiplicam bytes so com DESLOCAMENTO e XOR:
+    multiplicar por 02 e' deslocar 1 bit e, se o primeiro bit era 1, fazer XOR
+    com 1B; as outras constantes (03, 09, 0B, 0D, 0E) somam por XOR os multiplos
+    01, 02, 04 e 08 do byte que os bits da constante selecionam;
+  - a expansao de chave usa RotWord, SubWord (a mesma S-box) e Rcon, com o
+    Rcon na tabela 01 02 04 08 10 20 40 80 1B 36.
 
-Duas camadas neste modulo (igual ao des.py):
+Duas camadas neste modulo:
 
   1. MOTOR AES (funcoes privadas com prefixo "_"): operam sobre BYTES CRUS
      (0-255). E' contra elas que os vetores oficiais do FIPS-197 sao
@@ -58,137 +62,152 @@ TAMANHO_BLOCO = 16   # bytes = 128 bits
 TAMANHO_CHAVE = 16   # bytes = 128 bits  -> AES-128
 NUM_RODADAS = 10     # Nr: 10 rodadas para chave de 128 bits
 NUM_COLUNAS = 4      # Nb: o estado tem sempre 4 colunas (4 palavras)
-POLINOMIO_REDUCAO = 0x11B  # x^8 + x^4 + x^3 + x + 1  (irredutivel em GF(2))
 
 
 # ============================================================
-# 1. ARITMETICA EM GF(2^8) -- bit a bit
+# 1. MULTIPLICACAO DE BYTES (campo de Galois GF(2^8), como na aula)
 # ============================================================
-# No AES cada byte e' um polinomio de grau <= 7 com coeficientes 0/1:
-#     0x57 = 0101 0111  ->  x^6 + x^4 + x^2 + x + 1
-# - SOMA em GF(2^8) e' XOR (soma de coeficientes modulo 2).
-# - MULTIPLICACAO e' multiplicacao de polinomios, reduzida modulo
-#   m(x) = x^8 + x^4 + x^3 + x + 1 (0x11B) para o resultado voltar a caber
-#   em 8 bits. Multiplicar por x (= 0x02) e' o bloco basico: "xtime".
+# O MixColumns e o InvMixColumns multiplicam bytes por constantes de uma
+# matriz fixa. Nesse "campo de Galois":
+#   - a SOMA e' o XOR bit a bit;
+#   - a MULTIPLICACAO usa so deslocamento de bits e XOR, como nos slides.
+#
+# MULTIPLICAR POR 02: desloca o byte 1 bit a esquerda. Se o primeiro bit
+# (bit 7) do byte ORIGINAL era 1, descarta o 9o bit e faz XOR com 1B
+# (0001 1011) -- a "correcao":
+#     02 x 47:  0100 0111 -> 1000 1110 = 8E             (primeiro bit 0: sem correcao)
+#     02 x 8E:  1000 1110 -> 1 0001 1100 -> 1C; 1C XOR 1B = 07   (primeiro bit 1)
+#
+# MULTIPLICAR POR OUTRA CONSTANTE: calculam-se os multiplos 01, 02, 04 e 08
+# do byte (cada um e' o anterior vezes 02) e faz-se XOR so dos multiplos cujo
+# bit esta ligado na constante:
+#     03 = 0000 0011 -> 02 e 01           03 x B = (02 x B) XOR B
+#     0E = 0000 1110 -> 08, 04 e 02       0B = 0000 1011 -> 08, 02 e 01
+#     0D = 0000 1101 -> 08, 04 e 01       09 = 0000 1001 -> 08 e 01
 
-def _xtime(byte: int) -> int:
+def _multiplicar_por_2(byte: int) -> int:
     """
-    Multiplica por x (0x02) em GF(2^8): desloca 1 bit a esquerda e, se o bit
-    7 estava ligado (o resultado teria grau 8), subtrai (XOR) o polinomio de
-    reducao -- como o bit 8 some no corte de 8 bits, so sobra XOR com 0x1B.
+    Multiplica o byte por 02: desloca 1 bit a esquerda e, se o primeiro bit
+    do byte original era 1, faz XOR com 1B.
 
-    >>> hex(_xtime(0x57))   # 0101 0111 -> 1010 1110, sem estouro
-    '0xae'
-    >>> hex(_xtime(0xae))   # 1010 1110 -> 1 0101 1100, estoura: XOR 0x1B
-    '0x47'
+    >>> hex(_multiplicar_por_2(0x47))   # 0100 0111 -> 1000 1110
+    '0x8e'
+    >>> hex(_multiplicar_por_2(0x8E))   # primeiro bit 1: 1C XOR 1B
+    '0x7'
     """
-    estourou = (byte & 0x80) != 0
-    byte = (byte << 1) & 0xFF
-    if estourou:
-        byte ^= 0x1B
-    return byte
+    deslocado = (byte << 1) & 0xFF   # o 9o bit e' descartado
+    if byte & 0x80:                  # o primeiro bit do byte original era 1?
+        deslocado ^= 0x1B
+    return deslocado
 
 
-def _mult_gf(a: int, b: int) -> int:
+def _multiplicar(constante: int, byte: int) -> int:
     """
-    Multiplicacao em GF(2^8), bit a bit ("shift-and-add"): para cada bit
-    ligado de `b` (do menos para o mais significativo), soma (XOR) em
-    `resultado` o valor atual de `a`; depois `a` e' multiplicado por x.
-    Exemplo do FIPS-197 (secao 4.2): 0x57 * 0x13 = 0xFE, pois
-    0x13 = 1 + x + x^4 => 0x57 + xtime(0x57) + xtime^4(0x57).
+    Multiplica o byte por uma constante de 4 bits (as das matrizes do
+    MixColumns e do InvMixColumns: 01, 02, 03, 09, 0B, 0D e 0E): XOR dos
+    multiplos 01, 02, 04 e 08 do byte que a constante seleciona pelos seus bits.
 
-    >>> hex(_mult_gf(0x57, 0x83))
-    '0xc1'
-    >>> hex(_mult_gf(0x57, 0x13))
-    '0xfe'
+    >>> hex(_multiplicar(0x03, 0x6E))   # (6E x 02) XOR 6E = DC XOR 6E
+    '0xb2'
+    >>> hex(_multiplicar(0x0E, 0x47))   # 08x47 XOR 04x47 XOR 02x47 = 0E XOR 07 XOR 8E
+    '0x87'
     """
+    if not 0 <= constante <= 0x0F:
+        raise ValueError("A constante deve caber em 4 bits (de 00 a 0F).")
+
+    multiplo_01 = byte
+    multiplo_02 = _multiplicar_por_2(multiplo_01)
+    multiplo_04 = _multiplicar_por_2(multiplo_02)
+    multiplo_08 = _multiplicar_por_2(multiplo_04)
+
     resultado = 0
-    for _ in range(8):
-        if b & 1:
-            resultado ^= a
-        a = _xtime(a)
-        b >>= 1
+    if constante & 0x01:
+        resultado ^= multiplo_01
+    if constante & 0x02:
+        resultado ^= multiplo_02
+    if constante & 0x04:
+        resultado ^= multiplo_04
+    if constante & 0x08:
+        resultado ^= multiplo_08
     return resultado
 
 
-def _inverso_gf(byte: int) -> int:
-    """
-    Inverso multiplicativo em GF(2^8): o unico byte `y` com byte * y = 1.
-    Por convencao do AES, o inverso de 0 e' 0 (0 nao tem inverso).
-    Busca direta entre 1..255 -- clara de ler e roda uma vez so, na carga
-    do modulo.
-    """
-    if byte == 0:
-        return 0
-    for candidato in range(1, 256):
-        if _mult_gf(byte, candidato) == 1:
-            return candidato
-    raise AssertionError("todo byte nao nulo tem inverso em GF(2^8)")
-
-
 # ============================================================
-# 2. S-BOX E S-BOX INVERSA -- calculadas, nao decoradas
+# 2. S-BOX E S-BOX INVERSA (tabelas dos slides)
 # ============================================================
-# SubBytes troca cada byte `b` por S(b), em dois passos (FIPS-197, 5.1.1):
-#   (1) b  <- inverso multiplicativo de b em GF(2^8)   (nao-linear)
-#   (2) transformacao AFIM, bit a bit:
-#         b'_i = b_i ^ b_(i+4) ^ b_(i+5) ^ b_(i+6) ^ b_(i+7) ^ c_i
-#       com indices de bit modulo 8 (i = 0 e' o bit menos significativo)
-#       e c = 0x63 (0110 0011).
-# O passo (1) da a nao-linearidade; o (2) impede pontos fixos (S(b) != b).
+# O SubBytes troca cada byte do estado pelo valor encontrado na tabela S-box:
+#   - o digito hexadecimal da ESQUERDA do byte escolhe a LINHA;
+#   - o digito hexadecimal da DIREITA do byte escolhe a COLUNA.
+# Exemplo: o byte 53 -> linha 5, coluna 3 -> SBOX[5][3] = ED.
+# O InvSubBytes faz a mesma busca na S-box INVERSA (SBOX_INV[0xE][0xD] = 53).
+# Tabelas 5.2(a) e 5.2(b) dos slides.
 
-CONSTANTE_AFIM = 0x63
+#            0     1     2     3     4     5     6     7     8     9     A     B     C     D     E     F
+SBOX = [
+    [0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76],  # linha 0
+    [0xCA, 0x82, 0xC9, 0x7D, 0xFA, 0x59, 0x47, 0xF0, 0xAD, 0xD4, 0xA2, 0xAF, 0x9C, 0xA4, 0x72, 0xC0],  # linha 1
+    [0xB7, 0xFD, 0x93, 0x26, 0x36, 0x3F, 0xF7, 0xCC, 0x34, 0xA5, 0xE5, 0xF1, 0x71, 0xD8, 0x31, 0x15],  # linha 2
+    [0x04, 0xC7, 0x23, 0xC3, 0x18, 0x96, 0x05, 0x9A, 0x07, 0x12, 0x80, 0xE2, 0xEB, 0x27, 0xB2, 0x75],  # linha 3
+    [0x09, 0x83, 0x2C, 0x1A, 0x1B, 0x6E, 0x5A, 0xA0, 0x52, 0x3B, 0xD6, 0xB3, 0x29, 0xE3, 0x2F, 0x84],  # linha 4
+    [0x53, 0xD1, 0x00, 0xED, 0x20, 0xFC, 0xB1, 0x5B, 0x6A, 0xCB, 0xBE, 0x39, 0x4A, 0x4C, 0x58, 0xCF],  # linha 5
+    [0xD0, 0xEF, 0xAA, 0xFB, 0x43, 0x4D, 0x33, 0x85, 0x45, 0xF9, 0x02, 0x7F, 0x50, 0x3C, 0x9F, 0xA8],  # linha 6
+    [0x51, 0xA3, 0x40, 0x8F, 0x92, 0x9D, 0x38, 0xF5, 0xBC, 0xB6, 0xDA, 0x21, 0x10, 0xFF, 0xF3, 0xD2],  # linha 7
+    [0xCD, 0x0C, 0x13, 0xEC, 0x5F, 0x97, 0x44, 0x17, 0xC4, 0xA7, 0x7E, 0x3D, 0x64, 0x5D, 0x19, 0x73],  # linha 8
+    [0x60, 0x81, 0x4F, 0xDC, 0x22, 0x2A, 0x90, 0x88, 0x46, 0xEE, 0xB8, 0x14, 0xDE, 0x5E, 0x0B, 0xDB],  # linha 9
+    [0xE0, 0x32, 0x3A, 0x0A, 0x49, 0x06, 0x24, 0x5C, 0xC2, 0xD3, 0xAC, 0x62, 0x91, 0x95, 0xE4, 0x79],  # linha A
+    [0xE7, 0xC8, 0x37, 0x6D, 0x8D, 0xD5, 0x4E, 0xA9, 0x6C, 0x56, 0xF4, 0xEA, 0x65, 0x7A, 0xAE, 0x08],  # linha B
+    [0xBA, 0x78, 0x25, 0x2E, 0x1C, 0xA6, 0xB4, 0xC6, 0xE8, 0xDD, 0x74, 0x1F, 0x4B, 0xBD, 0x8B, 0x8A],  # linha C
+    [0x70, 0x3E, 0xB5, 0x66, 0x48, 0x03, 0xF6, 0x0E, 0x61, 0x35, 0x57, 0xB9, 0x86, 0xC1, 0x1D, 0x9E],  # linha D
+    [0xE1, 0xF8, 0x98, 0x11, 0x69, 0xD9, 0x8E, 0x94, 0x9B, 0x1E, 0x87, 0xE9, 0xCE, 0x55, 0x28, 0xDF],  # linha E
+    [0x8C, 0xA1, 0x89, 0x0D, 0xBF, 0xE6, 0x42, 0x68, 0x41, 0x99, 0x2D, 0x0F, 0xB0, 0x54, 0xBB, 0x16],  # linha F
+]
+
+#            0     1     2     3     4     5     6     7     8     9     A     B     C     D     E     F
+SBOX_INV = [
+    [0x52, 0x09, 0x6A, 0xD5, 0x30, 0x36, 0xA5, 0x38, 0xBF, 0x40, 0xA3, 0x9E, 0x81, 0xF3, 0xD7, 0xFB],  # linha 0
+    [0x7C, 0xE3, 0x39, 0x82, 0x9B, 0x2F, 0xFF, 0x87, 0x34, 0x8E, 0x43, 0x44, 0xC4, 0xDE, 0xE9, 0xCB],  # linha 1
+    [0x54, 0x7B, 0x94, 0x32, 0xA6, 0xC2, 0x23, 0x3D, 0xEE, 0x4C, 0x95, 0x0B, 0x42, 0xFA, 0xC3, 0x4E],  # linha 2
+    [0x08, 0x2E, 0xA1, 0x66, 0x28, 0xD9, 0x24, 0xB2, 0x76, 0x5B, 0xA2, 0x49, 0x6D, 0x8B, 0xD1, 0x25],  # linha 3
+    [0x72, 0xF8, 0xF6, 0x64, 0x86, 0x68, 0x98, 0x16, 0xD4, 0xA4, 0x5C, 0xCC, 0x5D, 0x65, 0xB6, 0x92],  # linha 4
+    [0x6C, 0x70, 0x48, 0x50, 0xFD, 0xED, 0xB9, 0xDA, 0x5E, 0x15, 0x46, 0x57, 0xA7, 0x8D, 0x9D, 0x84],  # linha 5
+    [0x90, 0xD8, 0xAB, 0x00, 0x8C, 0xBC, 0xD3, 0x0A, 0xF7, 0xE4, 0x58, 0x05, 0xB8, 0xB3, 0x45, 0x06],  # linha 6
+    [0xD0, 0x2C, 0x1E, 0x8F, 0xCA, 0x3F, 0x0F, 0x02, 0xC1, 0xAF, 0xBD, 0x03, 0x01, 0x13, 0x8A, 0x6B],  # linha 7
+    [0x3A, 0x91, 0x11, 0x41, 0x4F, 0x67, 0xDC, 0xEA, 0x97, 0xF2, 0xCF, 0xCE, 0xF0, 0xB4, 0xE6, 0x73],  # linha 8
+    [0x96, 0xAC, 0x74, 0x22, 0xE7, 0xAD, 0x35, 0x85, 0xE2, 0xF9, 0x37, 0xE8, 0x1C, 0x75, 0xDF, 0x6E],  # linha 9
+    [0x47, 0xF1, 0x1A, 0x71, 0x1D, 0x29, 0xC5, 0x89, 0x6F, 0xB7, 0x62, 0x0E, 0xAA, 0x18, 0xBE, 0x1B],  # linha A
+    [0xFC, 0x56, 0x3E, 0x4B, 0xC6, 0xD2, 0x79, 0x20, 0x9A, 0xDB, 0xC0, 0xFE, 0x78, 0xCD, 0x5A, 0xF4],  # linha B
+    [0x1F, 0xDD, 0xA8, 0x33, 0x88, 0x07, 0xC7, 0x31, 0xB1, 0x12, 0x10, 0x59, 0x27, 0x80, 0xEC, 0x5F],  # linha C
+    [0x60, 0x51, 0x7F, 0xA9, 0x19, 0xB5, 0x4A, 0x0D, 0x2D, 0xE5, 0x7A, 0x9F, 0x93, 0xC9, 0x9C, 0xEF],  # linha D
+    [0xA0, 0xE0, 0x3B, 0x4D, 0xAE, 0x2A, 0xF5, 0xB0, 0xC8, 0xEB, 0xBB, 0x3C, 0x83, 0x53, 0x99, 0x61],  # linha E
+    [0x17, 0x2B, 0x04, 0x7E, 0xBA, 0x77, 0xD6, 0x26, 0xE1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0C, 0x7D],  # linha F
+]
 
 
-def _bit(byte: int, posicao: int) -> int:
-    """Bit `posicao` (0 = menos significativo) de `byte`."""
-    return (byte >> posicao) & 1
+def _substituir_byte(byte: int, tabela: list[list[int]]) -> int:
+    """
+    Busca o byte na tabela: digito hexadecimal da esquerda = linha, digito
+    hexadecimal da direita = coluna.
 
-
-def _calcular_sbox_byte(byte: int) -> int:
-    """S-BOX de um unico byte: inverso em GF(2^8) + transformacao afim."""
-    inverso = _inverso_gf(byte)
-    resultado = 0
-    for i in range(8):
-        bit = (
-            _bit(inverso, i)
-            ^ _bit(inverso, (i + 4) % 8)
-            ^ _bit(inverso, (i + 5) % 8)
-            ^ _bit(inverso, (i + 6) % 8)
-            ^ _bit(inverso, (i + 7) % 8)
-            ^ _bit(CONSTANTE_AFIM, i)
-        )
-        resultado |= bit << i
-    return resultado
-
-
-SBOX = [_calcular_sbox_byte(b) for b in range(256)]
-
-# A S-BOX inversa nao precisa de formula propria: como S e' uma bijecao,
-# basta "ler a tabela de tras para frente": se S[b] = v, entao INV[v] = b.
-SBOX_INV = [0] * 256
-for _entrada, _saida in enumerate(SBOX):
-    SBOX_INV[_saida] = _entrada
+    >>> hex(_substituir_byte(0x53, SBOX))
+    '0xed'
+    >>> hex(_substituir_byte(0xED, SBOX_INV))
+    '0x53'
+    """
+    linha = byte >> 4        # digito da esquerda (os 4 bits de cima)
+    coluna = byte & 0x0F     # digito da direita (os 4 bits de baixo)
+    return tabela[linha][coluna]
 
 
 # ============================================================
 # 3. RCON -- constantes de rodada da expansao de chave
 # ============================================================
-# Rcon[i] = (x^(i-1) em GF(2^8), 0, 0, 0): so o primeiro byte e' diferente
-# de zero. Comeca em 0x01 e dobra (xtime) a cada rodada:
-#   01 02 04 08 10 20 40 80 1B 36        <- 0x80 * 2 estoura => 0x1B
-# (indexado de 1 a 10, como no FIPS-197; a posicao 0 nao e' usada).
+# Rcon[j] = (RC_j, 00, 00, 00): so o primeiro byte e' diferente de zero. Os
+# valores de RC_j sao os da tabela dos slides (rodada j = 1 a 10):
+#   Rcon(1)=01  Rcon(2)=02  Rcon(3)=04  Rcon(4)=08  Rcon(5)=10
+#   Rcon(6)=20  Rcon(7)=40  Rcon(8)=80  Rcon(9)=1B  Rcon(10)=36
+# A posicao 0 nao e' usada: assim RCON[j] e' o da rodada j.
 
-def _gerar_rcon() -> list[int]:
-    rcon = [0]  # posicao 0 fica vazia para que RCON[i] seja o da rodada i
-    valor = 0x01
-    for _ in range(NUM_RODADAS):
-        rcon.append(valor)
-        valor = _xtime(valor)
-    return rcon
-
-
-RCON = _gerar_rcon()
+RCON = [0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36]
 
 
 # ============================================================
@@ -235,7 +254,7 @@ def _rot_word(palavra: list[int]) -> list[int]:
 
 
 def _sub_word(palavra: list[int]) -> list[int]:
-    return [SBOX[byte] for byte in palavra]
+    return [_substituir_byte(byte, SBOX) for byte in palavra]
 
 
 def _expandir_chave(chave: bytes) -> list[list[int]]:
@@ -269,11 +288,13 @@ def _add_round_key(estado: list[list[int]], chave_rodada: list[list[int]]) -> li
 
 
 def _sub_bytes(estado: list[list[int]]) -> list[list[int]]:
-    return [[SBOX[byte] for byte in linha] for linha in estado]
+    """Cada byte do estado e' trocado pelo valor da tabela S-box."""
+    return [[_substituir_byte(byte, SBOX) for byte in linha] for linha in estado]
 
 
 def _inv_sub_bytes(estado: list[list[int]]) -> list[list[int]]:
-    return [[SBOX_INV[byte] for byte in linha] for linha in estado]
+    """Cada byte do estado e' trocado pelo valor da tabela S-box inversa."""
+    return [[_substituir_byte(byte, SBOX_INV) for byte in linha] for linha in estado]
 
 
 def _shift_rows(estado: list[list[int]]) -> list[list[int]]:
@@ -288,15 +309,17 @@ def _inv_shift_rows(estado: list[list[int]]) -> list[list[int]]:
     return [estado[linha][4 - linha:] + estado[linha][:4 - linha] for linha in range(4)]
 
 
-# MixColumns multiplica CADA COLUNA do estado (vetor de 4 bytes) por uma
-# matriz fixa 4x4, com produtos e somas em GF(2^8) (soma = XOR):
+# MixColumns multiplica CADA COLUNA do estado (vetor de 4 bytes) pela matriz
+# fixa 4x4 dos slides. Cada byte da saida e' o XOR de 4 produtos, calculados
+# com a multiplicacao da secao 1 (deslocar e XOR):
 #
 #   | s'0 |   | 02 03 01 01 |   | s0 |       s'0 = 02*s0 ^ 03*s1 ^ 01*s2 ^ 01*s3
 #   | s'1 | = | 01 02 03 01 | * | s1 |       s'1 = 01*s0 ^ 02*s1 ^ 03*s2 ^ 01*s3
 #   | s'2 |   | 01 01 02 03 |   | s2 |       s'2 = 01*s0 ^ 01*s1 ^ 02*s2 ^ 03*s3
 #   | s'3 |   | 03 01 01 02 |   | s3 |       s'3 = 03*s0 ^ 01*s1 ^ 01*s2 ^ 02*s3
 #
-# A inversa usa a matriz inversa (tambem em GF(2^8)):
+# O InvMixColumns usa a matriz inversa dos slides, do mesmo jeito (as
+# constantes 0E, 0B, 0D e 09 usam os multiplos 08, 04, 02 e 01 do byte):
 #   | 0E 0B 0D 09 |
 #   | 09 0E 0B 0D |
 #   | 0D 09 0E 0B |
@@ -318,13 +341,15 @@ MATRIZ_MIX_INV = [
 
 
 def _multiplicar_coluna(matriz: list[list[int]], coluna: list[int]) -> list[int]:
-    """Produto matriz x vetor em GF(2^8): cada elemento da saida e' o XOR
-    dos 4 produtos (constante da matriz * byte da coluna)."""
+    """Matriz fixa x coluna: cada byte da saida e' o XOR dos 4 produtos
+    (constante da linha da matriz x byte da coluna), com a multiplicacao da
+    secao 1. Exemplo dos slides, coluna 87 6E 46 A6, primeira linha:
+    (2*87) XOR (3*6E) XOR 46 XOR A6 = 15 XOR B2 XOR 46 XOR A6 = 47."""
     saida = []
     for linha in range(4):
         acumulado = 0
         for k in range(4):
-            acumulado ^= _mult_gf(matriz[linha][k], coluna[k])
+            acumulado ^= _multiplicar(matriz[linha][k], coluna[k])
         saida.append(acumulado)
     return saida
 

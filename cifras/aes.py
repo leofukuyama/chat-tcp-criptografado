@@ -20,7 +20,7 @@ Fluxo completo de um bloco:
 
     AddRoundKey(chave 0)
     rodadas 1..9 : SubBytes -> ShiftRows -> MixColumns -> AddRoundKey
-    rodada 10    : SubBytes -> ShiftRows ->              AddRoundKey
+    rodada 10    : SubBytes -> ShiftRows ->               AddRoundKey
                    (a ultima rodada NAO tem MixColumns!)
 
 Tudo aqui usa so as ferramentas apresentadas na aula:
@@ -142,7 +142,7 @@ def _multiplicar(constante: int, byte: int) -> int:
 # O InvSubBytes faz a mesma busca na S-box INVERSA (SBOX_INV[0xE][0xD] = 53).
 # Tabelas 5.2(a) e 5.2(b) dos slides.
 
-#            0     1     2     3     4     5     6     7     8     9     A     B     C     D     E     F
+#    0     1     2     3     4     5     6     7     8     9     A     B     C     D     E     F
 SBOX = [
     [0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76],  # linha 0
     [0xCA, 0x82, 0xC9, 0x7D, 0xFA, 0x59, 0x47, 0xF0, 0xAD, 0xD4, 0xA2, 0xAF, 0x9C, 0xA4, 0x72, 0xC0],  # linha 1
@@ -162,7 +162,7 @@ SBOX = [
     [0x8C, 0xA1, 0x89, 0x0D, 0xBF, 0xE6, 0x42, 0x68, 0x41, 0x99, 0x2D, 0x0F, 0xB0, 0x54, 0xBB, 0x16],  # linha F
 ]
 
-#            0     1     2     3     4     5     6     7     8     9     A     B     C     D     E     F
+#    0     1     2     3     4     5     6     7     8     9     A     B     C     D     E     F
 SBOX_INV = [
     [0x52, 0x09, 0x6A, 0xD5, 0x30, 0x36, 0xA5, 0x38, 0xBF, 0x40, 0xA3, 0x9E, 0x81, 0xF3, 0xD7, 0xFB],  # linha 0
     [0x7C, 0xE3, 0x39, 0x82, 0x9B, 0x2F, 0xFF, 0x87, 0x34, 0x8E, 0x43, 0x44, 0xC4, 0xDE, 0xE9, 0xCB],  # linha 1
@@ -215,7 +215,7 @@ RCON = [0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36]
 # ============================================================
 # Os 16 bytes do bloco entram na matriz POR COLUNA (nao por linha):
 #
-#     bytes:  b0 b1 b2 b3 b4 b5 ... b15            b0 b4 b8  b12
+#     bytes:  b0 b1 b2 b3 b4 b5 ... b15                    b0 b4 b8  b12
 #     estado[linha][coluna]  =  bloco[linha + 4*coluna]    b1 b5 b9  b13
 #                                                          b2 b6 b10 b14
 #                                                          b3 b7 b11 b15

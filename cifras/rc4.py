@@ -265,8 +265,9 @@ def bytes_brutos(texto_cifrado: str) -> bytes:
     da rede, inclusive lixo.
 
     Extensão OPCIONAL do contrato das cifras (ver cifras/sem_criptografia.py):
-    só existe aqui porque o criptograma do RC4 não é ASCII "de fábrica"
-    como o das outras cinco cifras -- um chamador pode testar
+    existe aqui porque o criptograma do RC4 não é ASCII "de fábrica" -- o
+    DES (cifras/des.py) tem a mesma extensão pelo mesmo motivo, então RC4
+    não é mais o único caso -- um chamador pode testar
     `hasattr(modulo, "bytes_brutos")` antes de usar.
 
     >>> bytes_brutos(cifrar("Plaintext", "Key")).hex()

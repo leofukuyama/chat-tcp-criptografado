@@ -65,6 +65,7 @@ corrente.
 | R5 | Cifras: César, monoalfabética, Playfair, Vigenère, e modo aberto | `cifras/` |
 | R5+ | *(extensão além do enunciado)* Cifra de fluxo RC4 | `cifras/rc4.py`, §6.8 |
 | R5+ | *(extensão além do enunciado)* Cifra de bloco DES (chave ASCII de até 8 caracteres ou 16 dígitos hexadecimais) | `cifras/des.py`, `README-DES.md` §7 |
+| R5+ | *(extensão além do enunciado)* Cifra de bloco AES-128 (opção 8) | `cifras/aes.py`, [README-AES.md](README-AES.md) |
 | R6 | Normalização: maiúsculas, `Á→A`, `Ç→C`, pontuação preservada | `ascii_puro.normalizar()` |
 | R7 | **Apenas ASCII (0–127) circula na rede** | `ascii_puro.py` (3 camadas) |
 | R8 | O sistema nunca cai por causa de um caractere inesperado | tratamento de erro em todas as bordas |

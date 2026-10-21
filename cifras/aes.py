@@ -554,8 +554,14 @@ def cifrar(texto: str, chave: str) -> str:
     ''
     """
     chave_bytes = _preparar_chave(chave)
-    texto_normalizado = ascii_puro.normalizar(texto)
-    dados = ascii_puro.codificar(texto_normalizado)
+    modo_hex = texto.lower().startswith("hex:")
+
+    if modo_hex:
+        texto_hex = texto[4:].replace(" ", "")
+        dados = bytes.fromhex(texto_hex)
+    else:
+        texto_normalizado = ascii_puro.normalizar(texto)
+        dados = ascii_puro.codificar(texto_normalizado)
 
     if not dados:
         return ""
@@ -563,7 +569,10 @@ def cifrar(texto: str, chave: str) -> str:
     w = _expandir_chave(chave_bytes)
     blocos = _dividir_em_blocos(dados)
     cifrado = b"".join(_cifrar_bloco(bloco, w) for bloco in blocos)
-    return base64.b64encode(cifrado).decode("ascii")
+
+    resultado = base64.b64encode(cifrado).decode("ascii")
+
+    return "H:" + resultado if modo_hex else resultado
 
 
 def _base64_decode_tolerante(texto: str) -> bytes:
@@ -587,6 +596,9 @@ def bytes_brutos(texto_cifrado: str) -> bytes:
     criptograma decodificado do Base64 para client.py exibir
     "[CIFRADO decimal]" e "[CIFRADO hexadecimal]", como no RC4 e no DES.
     """
+    if texto_cifrado.startswith("H:"):
+        texto_cifrado = texto_cifrado[2:]
+
     return _base64_decode_tolerante(texto_cifrado)
 
 
@@ -608,6 +620,12 @@ def decifrar(texto: str, chave: str) -> str:
     """
     chave_bytes = _preparar_chave(chave)
     w = _expandir_chave(chave_bytes)
+
+    modo_hex = texto.startswith("H:")
+
+    if modo_hex:
+        texto = texto[2:]
+
     dados = _base64_decode_tolerante(texto)
 
     n_blocos_completos = len(dados) // TAMANHO_BLOCO
@@ -615,6 +633,9 @@ def decifrar(texto: str, chave: str) -> str:
     for indice in range(n_blocos_completos):
         bloco = dados[indice * TAMANHO_BLOCO:(indice + 1) * TAMANHO_BLOCO]
         decifrado.extend(_decifrar_bloco(bloco, w))
+
+        if modo_hex:
+            return bytes(decifrado).hex().upper()
 
     sem_padding = bytes(decifrado).rstrip(b"\x00")
     return sem_padding.decode("ascii", errors="backslashreplace")

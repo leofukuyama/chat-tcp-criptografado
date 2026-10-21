@@ -134,9 +134,17 @@ def mostrar_quadro(quadro, modulo, chave):
         print(f"[CIFRADO hexadecimal] {brutos.hex(' ').upper()}")
 
     print(f"[DECIFRADO] {texto_claro}")
+    
     if hasattr(modulo, "bytes_brutos"):
         # Texto plano em hexadecimal (sem o padding de zeros), como no slide.
-        print(f"[DECIFRADO hexadecimal] {texto_claro.encode('ascii', 'replace').hex(' ').upper()}")
+        if quadro.texto.startswith("H:"):
+            print(f"[DECIFRADO hexadecimal] {texto_claro}")
+        else:
+            print(
+                f"[DECIFRADO hexadecimal] "
+                f"{texto_claro.encode('ascii', 'replace').hex(' ').upper()}"
+            )
+
     print(" > ", end="", flush=True)
     return True
 

@@ -58,6 +58,10 @@ class ServidorEmTeste:
         self._leitor = threading.Thread(target=self._drenar_stdout, daemon=True)
         self._leitor.start()
         self._esperar_porta_abrir()
+        # A sondagem acima é uma conexão de verdade e ocupa, por um instante,
+        # uma das 2 vagas da sala. Espera o servidor liberá-la antes de o
+        # teste abrir os clientes.
+        time.sleep(0.3)
         return self
 
     def _drenar_stdout(self):
@@ -137,6 +141,13 @@ class ClienteCru:
             self.sock.close()
         except OSError:
             pass
+
+
+def sem_contagem(quadros):
+    """Remove os quadros de controle "/participantes N" (o servidor avisa a
+    contagem da sala a cada entrada e saída; ver server.py)."""
+    return [q for q in quadros if not (q.tipo == protocolo.TIPO_CONTROLE
+                                       and q.texto.startswith("/participantes"))]
 
 
 def sala(qtd=2):
@@ -304,14 +315,18 @@ def teste_mensagem_maior_que_o_buffer_de_recv():
 
 def teste_cabecalho_corrompido_derruba_so_o_infrator():
     """Sem tamanho confiavel nao da para ressincronizar, entao a conexao do
-    infrator cai -- mas os outros clientes seguem normalmente."""
+    infrator cai -- mas o outro cliente segue normalmente. A sala aceita so
+    2 pessoas, entao a vaga de Alice e ocupada por Carol depois da queda."""
     with ServidorEmTeste():
-        alice, bob, carol = sala(3)
+        alice, bob = sala(2)
 
         alice.enviar_bytes(b"ATAQUE SEM CABECALHO")
         time.sleep(0.5)
 
+        carol = ClienteCru()
+        time.sleep(0.3)
         carol.drenar()
+        bob.drenar()
         bob.enviar("CONTINUO AQUI")
         assert carol.textos() == ["CONTINUO AQUI"], (
             "Bob e Carol deveriam seguir conversando depois da queda de Alice"
@@ -373,7 +388,8 @@ def teste_nao_existe_handshake_de_apelido():
         # Alice nunca respondeu nada. Se ainda houvesse handshake, o laco de
         # accept() estaria bloqueado em recv() e Bob nem conectaria.
         bob = ClienteCru()
-        quadros = alice.receber()
+        time.sleep(0.3)
+        quadros = sem_contagem(alice.receber())
 
         assert [q.tipo for q in quadros] == [protocolo.TIPO_SISTEMA], (
             f"Alice deveria receber o aviso de entrada de Bob, veio {quadros}"
@@ -385,15 +401,19 @@ def teste_nao_existe_handshake_de_apelido():
 def teste_avisos_de_sistema_sao_anonimos_e_ascii():
     with ServidorEmTeste():
         alice = ClienteCru()
+        time.sleep(0.3)
+        alice.drenar()            # "/participantes 1" de quando Alice entrou
         bob = ClienteCru()
-        entrada = alice.receber()
+        time.sleep(0.3)
+        entrada = sem_contagem(alice.receber())
 
         assert [q.texto for q in entrada] == ["Alguem entrou no chat :D"], (
             f"aviso de entrada inesperado: {[q.texto for q in entrada]}"
         )
 
         bob.enviar("/sair", tipo=protocolo.TIPO_CONTROLE)
-        saida = alice.receber()
+        time.sleep(0.3)
+        saida = sem_contagem(alice.receber())
 
         assert [q.texto for q in saida] == ["Alguem saiu do chat ;-;"], (
             f"aviso de saida inesperado: {[q.texto for q in saida]}"

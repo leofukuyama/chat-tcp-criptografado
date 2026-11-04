@@ -1,4 +1,5 @@
 from cifras import sem_criptografia, cesar, monoalfabetica, playfair, vigenere, rc4, des, aes
+from cifras import diffie_hellman
 
 CIFRAS = {
     "1": sem_criptografia,
@@ -9,6 +10,7 @@ CIFRAS = {
     "6": rc4,
     "7": des,
     "8": aes,
+    "9": diffie_hellman,
 }
 
 NOMES = {
@@ -20,4 +22,5 @@ NOMES = {
     "6": "Cifra de fluxo RC4",
     "7": "Cifra DES",
     "8": "Cifra AES",
+    "9": "Diffie-Hellman + César",
 }

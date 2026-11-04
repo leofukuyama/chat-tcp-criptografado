@@ -39,6 +39,45 @@ COMANDO_SAIR = "/sair"
 AVISO_ENTRADA = "Alguem entrou no chat :D"
 AVISO_SAIDA = "Alguem saiu do chat ;-;"
 
+# O chat é entre DUAS pessoas. A negociação Diffie-Hellman (opção 9) é feita
+# entre um remetente e um destinatário, e o passo 6 ("chave diferente da
+# mensagem anterior entre esses clientes") pressupõe uma conversa a dois.
+# Uma terceira conexão é recusada com um aviso e fechada.
+MAX_CLIENTES = 2
+AVISO_SALA_CHEIA = "Sala cheia: este chat aceita somente 2 participantes."
+
+# Quadro de CONTROLE enviado a todos a cada entrada ou saída: "/participantes N".
+# Sem ele, quem entra numa sala vazia não sabe que está sozinho: o aviso
+# "Alguem entrou" só vai para quem JÁ estava lá. O cliente da opção 9 usa
+# esse número para não negociar com ninguém (o A se perderia e a sessão
+# travaria esperando um B) e para recomeçar a conversa quando o outro
+# participante sai ou entra. É um quadro C e não um texto de aviso S de
+# propósito: o cliente decide pelo TIPO do quadro, não lendo o conteúdo, e
+# um cliente não consegue forjá-lo, porque o servidor ignora (e não repassa)
+# comandos desconhecidos vindos de clientes.
+COMANDO_PARTICIPANTES = "/participantes"
+
+
+def anunciar_participantes():
+    """Avisa todos os clientes de quantas pessoas há na sala agora."""
+    with lock:
+        quantidade = len(clients)
+    broadcast_quadro(protocolo.TIPO_CONTROLE, f"{COMANDO_PARTICIPANTES} {quantidade}")
+
+
+def resumir_payload(texto: str, pontas: int = 12) -> str:
+    """
+    Encurta, só para o log, os números enormes dos quadros de negociação
+    (A e B têm 617 dígitos). É manipulação de TEXTO: o servidor não
+    interpreta nem calcula nada com esses valores.
+    """
+    partes = []
+    for palavra in texto.split(" "):
+        if len(palavra) > 2 * pontas + 3:
+            palavra = f"{palavra[:pontas]}...{palavra[-pontas:]} ({len(palavra)} dígitos)"
+        partes.append(palavra)
+    return " ".join(partes)
+
 
 def formatar_endereco(address) -> str:
     """address vem do accept() como tupla (ip, porta)."""
@@ -123,6 +162,10 @@ def remover_cliente(client, avisar=True, motivo="saiu do chat"):
             # independentemente do motivo técnico da saída.
             broadcast_quadro(protocolo.TIPO_SISTEMA, AVISO_SAIDA)
 
+        # Quem ficou precisa saber que está sozinho (opção 9: a negociação
+        # em andamento é cancelada em vez de esperar um B que nunca vem).
+        anunciar_participantes()
+
     return endereco
 
 
@@ -202,6 +245,16 @@ def tratar_quadro(client, endereco, quadro):
             remover_cliente(client, motivo="saída voluntária (/sair)")
             return False
         print(f"[IGNORADO] comando desconhecido de {endereco}: {quadro.texto!r}")
+        return True
+
+    # --- Negociação Diffie-Hellman (opção 9) ---
+    # Passo 3 do enunciado: A e B são trocados POR MEIO do servidor. Ele
+    # imprime o que passou (é exatamente o que o Darth, escutando a rede,
+    # também veria: só valores públicos) e repassa. O servidor não importa
+    # nada de Diffie-Hellman: não calcula s, não calcula k, não decifra.
+    if quadro.tipo == protocolo.TIPO_NEGOCIACAO:
+        print(f"[DH repassado]     {resumir_payload(quadro.texto)}")
+        broadcast_raw(quadro.bytes_completos, remetente=client)
         return True
 
     # --- Conteúdo de chat de verdade ---
@@ -298,6 +351,19 @@ def receive():
             break
 
         endereco = formatar_endereco(address)
+
+        with lock:
+            lotada = len(clients) >= MAX_CLIENTES
+        if lotada:
+            print(f"[RECUSADO] {endereco} — sala cheia ({MAX_CLIENTES} participantes)")
+            try:
+                client.send(protocolo.empacotar(protocolo.TIPO_SISTEMA, AVISO_SALA_CHEIA))
+                client.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            client.close()
+            continue
+
         print(f"Conectado com {endereco}")
 
         with lock:
@@ -305,6 +371,9 @@ def receive():
             clients.append(client)
 
         broadcast_quadro(protocolo.TIPO_SISTEMA, AVISO_ENTRADA, remetente=client)
+        # Vai para TODOS, inclusive para quem acabou de entrar: é assim que
+        # ele descobre se já há alguém do outro lado.
+        anunciar_participantes()
 
         thread = threading.Thread(target=handle, args=(client, endereco), daemon=True)
         thread.start()

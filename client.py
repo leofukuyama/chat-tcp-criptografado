@@ -36,70 +36,6 @@ aviso_dh_mostrado = False
 
 
 # ============================================================
-# INDICADOR DE CARREGAMENTO (opção 9)
-# ============================================================
-
-class Indicador:
-    """
-    Mostra "| / - \\" girando enquanto um cálculo demorado roda, para o
-    usuário saber que o programa está trabalhando e não travado.
-
-    Usado na verificação de p e g da opção 9, que leva alguns segundos (os
-    testes de primalidade com números de 617 dígitos). Uma thread redesenha
-    a linha do indicador; exibir() apaga essa linha antes de imprimir um
-    resultado, para os dois não se misturarem.
-    """
-
-    QUADROS = "|/-\\"
-
-    def __init__(self):
-        self._descricao = ""
-        self._largura = 0
-        self._lock = threading.Lock()
-        self._parar = threading.Event()
-        self._thread = threading.Thread(target=self._girar, daemon=True)
-
-    def __enter__(self):
-        self._thread.start()
-        return self
-
-    def __exit__(self, *_):
-        self._parar.set()
-        self._thread.join()
-        with self._lock:
-            self._apagar()
-        return False
-
-    def etapa(self, descricao):
-        """Troca o que o indicador diz que está sendo calculado."""
-        with self._lock:
-            self._descricao = descricao
-
-    def exibir(self, linha):
-        """Imprime uma linha de resultado no lugar do indicador."""
-        with self._lock:
-            self._apagar()
-            self._descricao = ""
-            print(f"  {linha}", flush=True)
-
-    def _apagar(self):
-        if self._largura:
-            print("\r" + " " * self._largura + "\r", end="", flush=True)
-            self._largura = 0
-
-    def _girar(self):
-        i = 0
-        while not self._parar.wait(0.12):
-            with self._lock:
-                if not self._descricao:
-                    continue
-                texto = f"  {self.QUADROS[i % len(self.QUADROS)]} {self._descricao}..."
-                print("\r" + texto.ljust(self._largura), end="", flush=True)
-                self._largura = len(texto)
-                i += 1
-
-
-# ============================================================
 # SELEÇÃO DE CIFRA (100% LOCAL — não envolve o servidor)
 # ============================================================
 
@@ -131,18 +67,15 @@ def escolher_cifra():
         if getattr(modulo, "NEGOCIA_CHAVE_POR_MENSAGEM", False):
             # Opção 9: não há chave para digitar nem para combinar por fora.
             # Ela é negociada pela rede, a cada mensagem, por Diffie-Hellman.
-            # Antes de começar, confere que p e g são adequados (p primo
-            # seguro, g raiz primitiva) e mostra a verificação.
-            print("\nParâmetros públicos de Diffie-Hellman (fixos, iguais nos dois clientes).")
-            print("Verificando p e g antes de iniciar a conversa (leva alguns segundos)...")
-            try:
-                with Indicador() as indicador:
-                    modulo.verificar_parametros(
-                        exibir=indicador.exibir, etapa=indicador.etapa
-                    )
-            except ValueError as erro:
-                print(f"Parâmetros inválidos, opção indisponível: {erro}")
-                continue
+            # p e g são constantes: a prova de que são adequados é feita uma
+            # vez, pelos testes e por scripts/verificar_parametros_dh.py, e
+            # não a cada vez que o chat abre.
+            print(
+                f"\nParâmetros públicos de Diffie-Hellman (fixos, iguais nos dois clientes):\n"
+                f"  p = primo seguro de {modulo.P.bit_length()} bits (RFC 3526, grupo 14)\n"
+                f"  g = {modulo.G} (raiz primitiva de p)\n"
+                f"  Justificativa: python scripts/verificar_parametros_dh.py"
+            )
             print("Cada mensagem terá uma negociação NOVA e uma chave de César própria.")
             return modulo, ""
 

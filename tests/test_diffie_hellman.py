@@ -136,15 +136,18 @@ def teste_g_11_e_a_menor_raiz_primitiva_de_p():
         assert not dh.eh_raiz_primitiva(g, dh.P, dh.FATORES_PHI), f"{g} não deveria ser raiz primitiva"
 
 
-def teste_verificar_parametros_aceita_os_do_chat_e_recusa_ruins():
-    linhas = dh.verificar_parametros()
-    assert any("raiz primitiva" in l for l in linhas)
-    for p, g, q in ((dh.P, 2, dh.Q), (dh.P + 2, dh.G, dh.Q + 1)):
-        try:
-            dh.verificar_parametros(p, g, q)
-        except ValueError:
-            continue
-        raise AssertionError(f"deveria recusar p/g ruins (g={g})")
+def teste_script_de_verificacao_confirma_p_e_g():
+    # scripts/verificar_parametros_dh.py é a justificativa de p e g mostrada
+    # no vídeo; precisa terminar com sucesso e concluir "ADEQUADOS".
+    import subprocess
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    resultado = subprocess.run(
+        [sys.executable, os.path.join("scripts", "verificar_parametros_dh.py")],
+        cwd=raiz, capture_output=True, text=True, encoding="utf-8",
+        env=dict(os.environ, PYTHONIOENCODING="utf-8"),
+    )
+    assert resultado.returncode == 0, resultado.stdout + resultado.stderr
+    assert "ADEQUADOS" in resultado.stdout and "FALHOU" not in resultado.stdout
 
 
 def teste_chave_cesar_fica_sempre_entre_1_e_25():

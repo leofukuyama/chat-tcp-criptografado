@@ -935,6 +935,7 @@ python tests/test_integracao_ascii.py     # sobe o servidor real; leva alguns se
 python tests/test_diffie_hellman.py       # opção 9: Diffie-Hellman + César (README-DH.md)
 python tests/test_integracao_dh.py        # opção 9 com o servidor real
 python scripts/demonstracao_dh.py         # demonstração das 5 mensagens com os programas reais
+python scripts/verificar_parametros_dh.py # justificativa de p e g (--pausar para o vídeo)
 
 # doctests dos módulos de produção (sem saída = tudo passou)
 python -m doctest ascii_puro.py protocolo.py cifras/cesar.py cifras/monoalfabetica.py cifras/playfair.py cifras/vigenere.py cifras/rc4.py cifras/des.py cifras/diffie_hellman.py
@@ -1074,7 +1075,8 @@ chat-tcp-criptografado/
 │
 ├── scripts/
 │   ├── verificar_wireshark.py    Confere ao vivo o que o Wireshark capturou (§8.6)
-│   └── demonstracao_dh.py        Demonstração da opção 9 (gera docs/demonstracao-dh.txt)
+│   ├── demonstracao_dh.py        Demonstração da opção 9 (gera docs/demonstracao-dh.txt)
+│   └── verificar_parametros_dh.py Justificativa de p e g da opção 9 (roteiro da aula)
 │
 ├── README-VIGENERE-PLAYFAIR.md   Documento de apoio à apresentação: passo a passo
 │                                  didático das duas cifras

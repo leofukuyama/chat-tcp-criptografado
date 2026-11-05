@@ -46,12 +46,13 @@ programa de força bruta mostrado na aula). O enunciado pede parâmetros
       Passo 3: g^(phi/2) mod p != 1  e  g^(phi/q) mod p != 1
                => g é raiz primitiva
 
-  Tudo isso é VERIFICADO em tempo de execução por verificar_parametros(),
-  não apenas afirmado aqui.
+  Como p e g são constantes, isso é provado uma vez, não a cada execução:
+  pelos testes (tests/test_diffie_hellman.py) e pelo script
+  scripts/verificar_parametros_dh.py, que mostra o passo a passo.
 
 Os cálculos usam somente exp_mod() deste módulo. Não se usa a função
-embutida pow do Python nem biblioteca de criptografia; a única coisa da biblioteca padrão é o
-sorteio dos valores privados (módulo `secrets`, gerador criptográfico do
+embutida pow do Python nem biblioteca de criptografia; a única coisa da
+biblioteca padrão é o sorteio dos valores privados (módulo `secrets`, gerador criptográfico do
 sistema operacional).
 """
 
@@ -205,62 +206,6 @@ def eh_raiz_primitiva(g: int, p: int, fatores_phi) -> bool:
         return False
     phi = p - 1
     return all(exp_mod(g, phi // f, p) != 1 for f in fatores_phi)
-
-
-def verificar_parametros(p: int = P, g: int = G, q: int = Q,
-                         exibir=None, etapa=None) -> list[str]:
-    """
-    Confere que (p, g) servem para Diffie-Hellman e devolve o passo a passo
-    como linhas de texto, para o cliente mostrar ao iniciar.
-
-    Leva alguns segundos (os dois testes de Miller-Rabin com 617 dígitos
-    são a parte cara). Para o usuário não achar que o programa travou, quem
-    chama pode passar:
-      etapa(descricao)  chamada ANTES de cada cálculo demorado
-                        (o cliente mostra um indicador de carregamento);
-      exibir(linha)     chamada assim que cada linha do resultado fica pronta.
-
-    Levanta ValueError se alguma condição falhar. Nesse caso o chat não
-    pode começar, porque uma troca de chaves com p ou g ruins daria uma
-    falsa sensação de segurança.
-    """
-    linhas = []
-
-    def registrar(linha):
-        linhas.append(linha)
-        if exibir:
-            exibir(linha)
-
-    def avisar(descricao):
-        if etapa:
-            etapa(descricao)
-
-    phi = p - 1
-    registrar(f"p = primo do RFC 3526, grupo 14 ({p.bit_length()} bits, {len(str(p))} dígitos)")
-
-    avisar("testando se p é primo (Miller-Rabin, 40 rodadas)")
-    if not eh_provavel_primo(p):
-        raise ValueError("p não é primo")
-    registrar("p é primo (Miller-Rabin, 40 rodadas)")
-
-    avisar("testando se q = (p - 1)/2 é primo (Miller-Rabin, 40 rodadas)")
-    if phi != 2 * q or not eh_provavel_primo(q):
-        raise ValueError("p não é um primo seguro (p - 1 deveria ser 2 * q com q primo)")
-    registrar("Passo 1: phi(p) = p - 1")
-    registrar("Passo 2: phi(p) = 2 * q, com q = (p - 1)/2 primo  -> p é um primo seguro")
-
-    avisar("calculando g^(phi/2) mod p e g^(phi/q) mod p")
-    r1 = exp_mod(g, phi // 2, p)
-    r2 = exp_mod(g, phi // q, p)
-    menos_um = "  (= p - 1)" if r1 == p - 1 else ""
-    registrar(f"Passo 3: g^(phi/2) mod p = g^q mod p = {resumir(r1)}{menos_um}  (!= 1)")
-    registrar(f"         g^(phi/q) mod p = g^2 mod p = {r2}  (!= 1)")
-    # Mesmo critério de eh_raiz_primitiva(g, p, (2, q)), reaproveitando as
-    # duas potências que já foram calculadas e mostradas acima.
-    if not 1 < g < p or r1 == 1 or r2 == 1:
-        raise ValueError(f"g = {g} não é raiz primitiva de p")
-    registrar(f"Portanto g = {g} é raiz primitiva de p.")
-    return linhas
 
 
 # ============================================================

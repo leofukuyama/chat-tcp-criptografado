@@ -20,6 +20,7 @@ Os três terminais completos são gravados em docs/demonstracao-dh.txt.
 
 import os
 import re
+import socket
 import subprocess
 import sys
 import threading
@@ -69,19 +70,13 @@ class Processo:
         """
         O que ficou visível no terminal. Um "\\r" volta ao começo da linha e
         o que vem depois a sobrescreve (é assim que o cliente redesenha o
-        prompt e o indicador de carregamento), então de cada linha fica só
-        o último trecho.
+        prompt " > "), então de cada linha fica só o último trecho.
         """
         bruto = b"".join(self._partes).decode("utf-8", errors="replace")
         linhas = []
         for linha in bruto.split("\n"):
-            visivel = linha.split("\r")[-1] if "\r" in linha else linha
-            if "\r" in linha and not visivel.strip():
-                # Linha apagada (ex.: o indicador limpo antes de um resultado):
-                # fica o último trecho que tinha conteúdo.
-                trechos = [t for t in linha.split("\r") if t.strip()]
-                visivel = trechos[-1] if trechos else ""
-            linhas.append(visivel)
+            trechos = [t for t in linha.split("\r") if t.strip()]
+            linhas.append(trechos[-1] if trechos else "")
         return "\n".join(linhas)
 
     def digitar(self, linha):
@@ -156,7 +151,16 @@ def resumo(alice, bob, servidor):
         assert ka == kb, f"mensagem {n}: chaves diferentes nos dois clientes"
         assert ka != anterior, f"mensagem {n}: chave igual à da mensagem anterior"
         assert original is not None and original == texto.upper(), f"mensagem {n}: texto não recuperado"
+        assert cif != "?", f"mensagem {n}: o texto cifrado não apareceu no terminal do servidor"
+        assert cif != texto.upper(), f"mensagem {n}: o servidor viu o texto em claro"
         anterior = ka
+    assert len(cifrados) == len(MENSAGENS), (
+        f"o servidor imprimiu {len(cifrados)} textos cifrados para {len(MENSAGENS)} mensagens"
+    )
+    assert len(a_repassados) >= len(MENSAGENS), (
+        f"o servidor repassou {len(a_repassados)} valores A para {len(MENSAGENS)} mensagens: "
+        "cada mensagem precisa de uma negociação própria"
+    )
     linhas.append("")
     linhas.append(f"Negociações (valores A) que passaram pelo servidor: {len(a_repassados)} "
                   f"para {len(MENSAGENS)} mensagens.")
@@ -165,23 +169,45 @@ def resumo(alice, bob, servidor):
     return "\n".join(linhas)
 
 
+def porta_ocupada() -> bool:
+    """Já existe algum servidor escutando na porta do chat?"""
+    try:
+        socket.create_connection(("127.0.0.1", 64146), timeout=0.5).close()
+        return True
+    except OSError:
+        return False
+
+
 def main():
+    # No Windows, o SO_REUSEADDR do server.py deixa um SEGUNDO servidor abrir
+    # a porta 64146 sem erro, e os clientes acabam conectados ao servidor
+    # antigo: a conversa funciona, mas o terminal capturado aqui fica vazio.
+    if porta_ocupada():
+        print("Já existe um servidor rodando na porta 64146 (outro terminal com server.py?).")
+        print("Encerre-o (digite /sair no terminal dele) e rode a demonstração de novo.")
+        sys.exit(1)
+
     servidor = Processo("servidor", "server.py")
     try:
         servidor.esperar("Servidor está online")
         time.sleep(0.3)
         alice = Processo("alice", "client.py")
-        time.sleep(0.3)
+        servidor.esperar("Conectado com")
         bob = Processo("bob", "client.py")
-        time.sleep(0.3)
+        inicio = time.time()
+        while servidor.texto().count("Conectado com") < 2:
+            if time.time() - inicio > 10:
+                raise RuntimeError(
+                    "os clientes não se conectaram ao servidor desta demonstração "
+                    "(há outro servidor na porta 64146?)"
+                )
+            time.sleep(0.05)
         clientes = {"alice": alice, "bob": bob}
 
-        print("Escolhendo a opção 9 nos dois clientes e verificando p e g...")
+        print("Escolhendo a opção 9 nos dois clientes...")
         for c in clientes.values():
             c.esperar("Opção:")
             c.digitar("9")
-        for c in clientes.values():
-            c.esperar("raiz primitiva de p")
         for c in clientes.values():
             c.esperar("conversa iniciada")
         time.sleep(0.3)

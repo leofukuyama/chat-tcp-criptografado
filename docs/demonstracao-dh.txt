@@ -4,12 +4,12 @@ Números de 617 dígitos aparecem resumidos: começo...fim (tamanho).
 
 RESUMO (extraído dos três terminais)
  #  de     negociações  k Alice  k Bob  cifrado no SERVIDOR     original recuperado no destinatário
- 1  alice            1        1      1  PMB CPC                 OLA BOB
- 2  alice            1       23     23  LIX YLY                 OLA BOB
- 3  alice            1        9      9  JCJLJA KJBN WXACN.      ATACAR BASE NORTE.
- 4  alice            1       19     19  TL 10A, LXF YTEMT       AS 10H, SEM FALTA
- 5  alice            1        6      6  IUTLOXSG?               CONFIRMA?
- 6  bob              1       11     11  NZYQTCXLOZ, LWTNP!      CONFIRMADO, ALICE!
+ 1  alice            1        3      3  ROD ERE                 OLA BOB
+ 2  alice            1       13     13  BYN OBO                 OLA BOB
+ 3  alice            1        5      5  FYFHFW GFXJ STWYJ.      ATACAR BASE NORTE.
+ 4  alice            1       14     14  OG 10V, GSA TOZHO       AS 10H, SEM FALTA
+ 5  alice            1       11     11  NZYQTCXL?               CONFIRMA?
+ 6  bob              1       21     21  XJIADMHVYJ, VGDXZ!      CONFIRMADO, ALICE!
 
 Negociações (valores A) que passaram pelo servidor: 6 para 6 mensagens.
 Conferido: mesma chave nos dois clientes, chaves consecutivas diferentes,
@@ -19,28 +19,28 @@ texto cifrado no servidor e texto original recuperado no destinatário.
 ##############################################################################
 Servidor está online... (digite /sair para encerrar tudo)
 Modo ASCII: quadros com qualquer byte fora de 0-127 são descartados.
-Conectado com 127.0.0.1:34958
-Conectado com 127.0.0.1:34960
-[DH repassado]     A e60fa2ec9d9cce20 1 495714256259...056049826856 (616 dígitos)
-[DH repassado]     B e60fa2ec9d9cce20 254969246441...284810325718 (617 dígitos)
-[CIFRADO recebido] PMB CPC
-[DH repassado]     A 7e31e49e19bc6b9b 1 119128482109...300221105343 (617 dígitos)
-[DH repassado]     B 7e31e49e19bc6b9b 109250844941...719635186563 (616 dígitos)
-[CIFRADO recebido] LIX YLY
-[DH repassado]     A bd2691004e69012a 1 322212323551...614580003894 (617 dígitos)
-[DH repassado]     B bd2691004e69012a 184179858791...912098923081 (615 dígitos)
-[CIFRADO recebido] JCJLJA KJBN WXACN.
-[DH repassado]     A 081ce724df01b18a 1 205895406618...258132581997 (617 dígitos)
-[DH repassado]     B 081ce724df01b18a 243976366352...932609132588 (617 dígitos)
-[CIFRADO recebido] TL 10A, LXF YTEMT
-[DH repassado]     A 126d53d668eac149 1 115626742491...399136943166 (617 dígitos)
-[DH repassado]     B 126d53d668eac149 151794585792...363438398076 (617 dígitos)
-[CIFRADO recebido] IUTLOXSG?
-[DH repassado]     A 02f7efcfad352bc2 1 187068552199...039000677548 (617 dígitos)
-[DH repassado]     B 02f7efcfad352bc2 641646473524...408727708138 (616 dígitos)
-[CIFRADO recebido] NZYQTCXLOZ, LWTNP!
-[DESCONECTADO] 127.0.0.1:34958 — saída voluntária (/sair)
-[DESCONECTADO] 127.0.0.1:34960 — saída voluntária (/sair)
+Conectado com 127.0.0.1:65217
+Conectado com 127.0.0.1:65218
+[DH repassado]     A c325c419ea68f067 1 286394216483...915746399992 (617 dígitos)
+[DH repassado]     B c325c419ea68f067 188157943153...907045685947 (617 dígitos)
+[CIFRADO recebido] ROD ERE
+[DH repassado]     A dd61e374673a4d8a 1 279220226031...604578262190 (617 dígitos)
+[DH repassado]     B dd61e374673a4d8a 284458906654...634565227226 (617 dígitos)
+[CIFRADO recebido] BYN OBO
+[DH repassado]     A d4b2ba3df064458d 1 168963635015...464108564450 (617 dígitos)
+[DH repassado]     B d4b2ba3df064458d 290092051830...881418785939 (617 dígitos)
+[CIFRADO recebido] FYFHFW GFXJ STWYJ.
+[DH repassado]     A adde7ffe7c197fc6 1 300111672010...992335771508 (617 dígitos)
+[DH repassado]     B adde7ffe7c197fc6 183241621674...574313519938 (617 dígitos)
+[CIFRADO recebido] OG 10V, GSA TOZHO
+[DH repassado]     A 1f6e637065d0b104 1 313517037168...447943978382 (617 dígitos)
+[DH repassado]     B 1f6e637065d0b104 164315409959...908339339507 (617 dígitos)
+[CIFRADO recebido] NZYQTCXL?
+[DH repassado]     A 17dce55cefb8cfe8 1 272892237584...368005498080 (617 dígitos)
+[DH repassado]     B 17dce55cefb8cfe8 150647469827...786561020670 (617 dígitos)
+[CIFRADO recebido] XJIADMHVYJ, VGDXZ!
+[DESCONECTADO] 127.0.0.1:65217 — saída voluntária (/sair)
+[DESCONECTADO] 127.0.0.1:65218 — saída voluntária (/sair)
 [ADMIN] Encerrando servidor e todos os clientes...
 Servidor encerrado.
 
@@ -60,85 +60,80 @@ Escolha o modo de transmissão:
 8 - Cifra AES
 9 - Diffie-Hellman + César
 Opção: 
-Parâmetros públicos de Diffie-Hellman (fixos, iguais nos dois clientes).
-Verificando p e g antes de iniciar a conversa (leva alguns segundos)...
-  p = primo do RFC 3526, grupo 14 (2048 bits, 617 dígitos)
-  p é primo (Miller-Rabin, 40 rodadas)
-  Passo 1: phi(p) = p - 1
-  Passo 2: phi(p) = 2 * q, com q = (p - 1)/2 primo  -> p é um primo seguro
-  Passo 3: g^(phi/2) mod p = g^q mod p = 323170060713...045361090558 (617 dígitos)  (= p - 1)  (!= 1)
-           g^(phi/q) mod p = g^2 mod p = 121  (!= 1)
-  Portanto g = 11 é raiz primitiva de p.
+Parâmetros públicos de Diffie-Hellman (fixos, iguais nos dois clientes):
+  p = primo seguro de 2048 bits (RFC 3526, grupo 14)
+  g = 11 (raiz primitiva de p)
+  Justificativa: python scripts/verificar_parametros_dh.py
 Cada mensagem terá uma negociação NOVA e uma chave de César própria.
-*** Aguardando o outro participante para iniciar a conversa... *** > 
+*** Aguardando o outro participante para iniciar a conversa... ***
 *** Alguem entrou no chat :D ***
 *** O outro participante está na sala: conversa iniciada. Cada mensagem terá uma negociação Diffie-Hellman nova. ***
-=== MENSAGEM #1 | negociação e60fa2ec9d9cce20 | tentativa 1 | você é o REMETENTE ===
- [1] valor privado NOVO:   a = 186932962564...632937377248 (617 dígitos)   (fica só neste terminal)
- [2] valor público:        A = g^a mod p = 495714256259...056049826856 (616 dígitos)
+=== MENSAGEM #1 | negociação c325c419ea68f067 | tentativa 1 | você é o REMETENTE ===
+ [1] valor privado NOVO:   a = 254660185514...145534526870 (616 dígitos)   (fica só neste terminal)
+ [2] valor público:        A = g^a mod p = 286394216483...915746399992 (617 dígitos)
  [3] enviando A ao destinatário pelo servidor...
- [3] B recebido do destinatário: B = 254969246441...284810325718 (617 dígitos)
- [4] segredo compartilhado:  s = B^a mod p = 948228368625...413256293950 (616 dígitos)
- [5] chave de César:         k = 1 + (s mod 25) = 1 + 0 = 1
+ [3] B recebido do destinatário: B = 188157943153...907045685947 (617 dígitos)
+ [4] segredo compartilhado:  s = B^a mod p = 246017109737...165003611927 (617 dígitos)
+ [5] chave de César:         k = 1 + (s mod 25) = 1 + 2 = 3
  [6] verificação: mensagem anterior usou nenhuma (primeira mensagem) -> chave aceita
- [7] CHAVE DESTA MENSAGEM:   k = 1
+ [7] CHAVE DESTA MENSAGEM:   k = 3
  [8] texto original:         Ola Bob
-     cifrado com César (k=1): PMB CPC   -> enviado ao servidor
-=== MENSAGEM #2 | negociação 7e31e49e19bc6b9b | tentativa 1 | você é o REMETENTE ===
- [1] valor privado NOVO:   a = 199699192003...113698056692 (617 dígitos)   (fica só neste terminal)
- [2] valor público:        A = g^a mod p = 119128482109...300221105343 (617 dígitos)
+     cifrado com César (k=3): ROD ERE   -> enviado ao servidor
+=== MENSAGEM #2 | negociação dd61e374673a4d8a | tentativa 1 | você é o REMETENTE ===
+ [1] valor privado NOVO:   a = 678490198839...939389302544 (615 dígitos)   (fica só neste terminal)
+ [2] valor público:        A = g^a mod p = 279220226031...604578262190 (617 dígitos)
  [3] enviando A ao destinatário pelo servidor...
- [3] B recebido do destinatário: B = 109250844941...719635186563 (616 dígitos)
- [4] segredo compartilhado:  s = B^a mod p = 654079536416...783381715747 (616 dígitos)
- [5] chave de César:         k = 1 + (s mod 25) = 1 + 22 = 23
- [6] verificação: mensagem anterior usou k = 1 -> chave aceita
- [7] CHAVE DESTA MENSAGEM:   k = 23
+ [3] B recebido do destinatário: B = 284458906654...634565227226 (617 dígitos)
+ [4] segredo compartilhado:  s = B^a mod p = 228927745566...125133992362 (617 dígitos)
+ [5] chave de César:         k = 1 + (s mod 25) = 1 + 12 = 13
+ [6] verificação: mensagem anterior usou k = 3 -> chave aceita
+ [7] CHAVE DESTA MENSAGEM:   k = 13
  [8] texto original:         Ola Bob
-     cifrado com César (k=23): LIX YLY   -> enviado ao servidor
-=== MENSAGEM #3 | negociação bd2691004e69012a | tentativa 1 | você é o REMETENTE ===
- [1] valor privado NOVO:   a = 103349688066...858749351731 (617 dígitos)   (fica só neste terminal)
- [2] valor público:        A = g^a mod p = 322212323551...614580003894 (617 dígitos)
+     cifrado com César (k=13): BYN OBO   -> enviado ao servidor
+=== MENSAGEM #3 | negociação d4b2ba3df064458d | tentativa 1 | você é o REMETENTE ===
+ [1] valor privado NOVO:   a = 737295734795...045441565701 (616 dígitos)   (fica só neste terminal)
+ [2] valor público:        A = g^a mod p = 168963635015...464108564450 (617 dígitos)
  [3] enviando A ao destinatário pelo servidor...
- [3] B recebido do destinatário: B = 184179858791...912098923081 (615 dígitos)
- [4] segredo compartilhado:  s = B^a mod p = 298622250693...229055222533 (617 dígitos)
- [5] chave de César:         k = 1 + (s mod 25) = 1 + 8 = 9
- [6] verificação: mensagem anterior usou k = 23 -> chave aceita
- [7] CHAVE DESTA MENSAGEM:   k = 9
+ [3] B recebido do destinatário: B = 290092051830...881418785939 (617 dígitos)
+ [4] segredo compartilhado:  s = B^a mod p = 857186751049...717394925479 (616 dígitos)
+ [5] chave de César:         k = 1 + (s mod 25) = 1 + 4 = 5
+ [6] verificação: mensagem anterior usou k = 13 -> chave aceita
+ [7] CHAVE DESTA MENSAGEM:   k = 5
  [8] texto original:         Atacar base norte.
-     cifrado com César (k=9): JCJLJA KJBN WXACN.   -> enviado ao servidor
-=== MENSAGEM #4 | negociação 081ce724df01b18a | tentativa 1 | você é o REMETENTE ===
- [1] valor privado NOVO:   a = 233960307295...474836161093 (617 dígitos)   (fica só neste terminal)
- [2] valor público:        A = g^a mod p = 205895406618...258132581997 (617 dígitos)
+     cifrado com César (k=5): FYFHFW GFXJ STWYJ.   -> enviado ao servidor
+=== MENSAGEM #4 | negociação adde7ffe7c197fc6 | tentativa 1 | você é o REMETENTE ===
+ [1] valor privado NOVO:   a = 187077724056...822137398654 (617 dígitos)   (fica só neste terminal)
+ [2] valor público:        A = g^a mod p = 300111672010...992335771508 (617 dígitos)
  [3] enviando A ao destinatário pelo servidor...
- [3] B recebido do destinatário: B = 243976366352...932609132588 (617 dígitos)
- [4] segredo compartilhado:  s = B^a mod p = 896319753111...644547077568 (616 dígitos)
- [5] chave de César:         k = 1 + (s mod 25) = 1 + 18 = 19
- [6] verificação: mensagem anterior usou k = 9 -> chave aceita
- [7] CHAVE DESTA MENSAGEM:   k = 19
+ [3] B recebido do destinatário: B = 183241621674...574313519938 (617 dígitos)
+ [4] segredo compartilhado:  s = B^a mod p = 855884662382...580685327313 (616 dígitos)
+ [5] chave de César:         k = 1 + (s mod 25) = 1 + 13 = 14
+ [6] verificação: mensagem anterior usou k = 5 -> chave aceita
+ [7] CHAVE DESTA MENSAGEM:   k = 14
  [8] texto original:         As 10h, sem falta
-     cifrado com César (k=19): TL 10A, LXF YTEMT   -> enviado ao servidor
-=== MENSAGEM #5 | negociação 126d53d668eac149 | tentativa 1 | você é o REMETENTE ===
- [1] valor privado NOVO:   a = 183118464996...645769808674 (617 dígitos)   (fica só neste terminal)
- [2] valor público:        A = g^a mod p = 115626742491...399136943166 (617 dígitos)
+     cifrado com César (k=14): OG 10V, GSA TOZHO   -> enviado ao servidor
+=== MENSAGEM #5 | negociação 1f6e637065d0b104 | tentativa 1 | você é o REMETENTE ===
+ [1] valor privado NOVO:   a = 277121761635...435030255047 (617 dígitos)   (fica só neste terminal)
+ [2] valor público:        A = g^a mod p = 313517037168...447943978382 (617 dígitos)
  [3] enviando A ao destinatário pelo servidor...
- [3] B recebido do destinatário: B = 151794585792...363438398076 (617 dígitos)
- [4] segredo compartilhado:  s = B^a mod p = 503906753985...118484883155 (616 dígitos)
- [5] chave de César:         k = 1 + (s mod 25) = 1 + 5 = 6
- [6] verificação: mensagem anterior usou k = 19 -> chave aceita
- [7] CHAVE DESTA MENSAGEM:   k = 6
- [8] texto original:         Confirma?
-     cifrado com César (k=6): IUTLOXSG?   -> enviado ao servidor
-=== MENSAGEM #6 | negociação 02f7efcfad352bc2 | tentativa 1 | você é o DESTINATÁRIO ===
- [3] A recebido do remetente: A = 187068552199...039000677548 (617 dígitos)
- [1] valor privado NOVO:   b = 154955132466...139734620117 (617 dígitos)   (fica só neste terminal)
- [2] valor público:        B = g^b mod p = 641646473524...408727708138 (616 dígitos)
- [4] segredo compartilhado:  s = A^b mod p = 312856940429...160635433635 (617 dígitos)
+ [3] B recebido do destinatário: B = 164315409959...908339339507 (617 dígitos)
+ [4] segredo compartilhado:  s = B^a mod p = 258858770193...975304052085 (617 dígitos)
  [5] chave de César:         k = 1 + (s mod 25) = 1 + 10 = 11
- [6] verificação: mensagem anterior usou k = 6 -> chave aceita
+ [6] verificação: mensagem anterior usou k = 14 -> chave aceita
  [7] CHAVE DESTA MENSAGEM:   k = 11
+ [8] texto original:         Confirma?
+     cifrado com César (k=11): NZYQTCXL?   -> enviado ao servidor
+=== MENSAGEM #6 | negociação 17dce55cefb8cfe8 | tentativa 1 | você é o DESTINATÁRIO ===
+ [3] A recebido do remetente: A = 272892237584...368005498080 (617 dígitos)
+ [1] valor privado NOVO:   b = 286385935732...069779709807 (617 dígitos)   (fica só neste terminal)
+ [2] valor público:        B = g^b mod p = 150647469827...786561020670 (617 dígitos)
+ [4] segredo compartilhado:  s = A^b mod p = 157888386874...040356012470 (617 dígitos)
+ [5] chave de César:         k = 1 + (s mod 25) = 1 + 20 = 21
+ [6] verificação: mensagem anterior usou k = 11 -> chave aceita
+ [7] CHAVE DESTA MENSAGEM:   k = 21
  [3] enviando B ao remetente pelo servidor... aguardando o texto cifrado
- [10] texto cifrado recebido:     NZYQTCXLOZ, LWTNP!
-      decifrado com k = 11
+ [10] texto cifrado recebido:     XJIADMHVYJ, VGDXZ!
+      decifrado com k = 21
       TEXTO ORIGINAL (mensagem #6): CONFIRMADO, ALICE!
 
 ##############################################################################
@@ -157,89 +152,83 @@ Escolha o modo de transmissão:
 8 - Cifra AES
 9 - Diffie-Hellman + César
 Opção: 
-Parâmetros públicos de Diffie-Hellman (fixos, iguais nos dois clientes).
-Verificando p e g antes de iniciar a conversa (leva alguns segundos)...
-  p = primo do RFC 3526, grupo 14 (2048 bits, 617 dígitos)
-  p é primo (Miller-Rabin, 40 rodadas)
-  Passo 1: phi(p) = p - 1
-  Passo 2: phi(p) = 2 * q, com q = (p - 1)/2 primo  -> p é um primo seguro
-  Passo 3: g^(phi/2) mod p = g^q mod p = 323170060713...045361090558 (617 dígitos)  (= p - 1)  (!= 1)
-           g^(phi/q) mod p = g^2 mod p = 121  (!= 1)
-  Portanto g = 11 é raiz primitiva de p.
+Parâmetros públicos de Diffie-Hellman (fixos, iguais nos dois clientes):
+  p = primo seguro de 2048 bits (RFC 3526, grupo 14)
+  g = 11 (raiz primitiva de p)
+  Justificativa: python scripts/verificar_parametros_dh.py
 Cada mensagem terá uma negociação NOVA e uma chave de César própria.
 *** O outro participante está na sala: conversa iniciada. Cada mensagem terá uma negociação Diffie-Hellman nova. ***
-=== MENSAGEM #1 | negociação e60fa2ec9d9cce20 | tentativa 1 | você é o DESTINATÁRIO ===
- [3] A recebido do remetente: A = 495714256259...056049826856 (616 dígitos)
- [1] valor privado NOVO:   b = 832902085587...920782111845 (616 dígitos)   (fica só neste terminal)
- [2] valor público:        B = g^b mod p = 254969246441...284810325718 (617 dígitos)
- [4] segredo compartilhado:  s = A^b mod p = 948228368625...413256293950 (616 dígitos)
- [5] chave de César:         k = 1 + (s mod 25) = 1 + 0 = 1
+=== MENSAGEM #1 | negociação c325c419ea68f067 | tentativa 1 | você é o DESTINATÁRIO ===
+ [3] A recebido do remetente: A = 286394216483...915746399992 (617 dígitos)
+ [1] valor privado NOVO:   b = 129605887052...723876856980 (617 dígitos)   (fica só neste terminal)
+ [2] valor público:        B = g^b mod p = 188157943153...907045685947 (617 dígitos)
+ [4] segredo compartilhado:  s = A^b mod p = 246017109737...165003611927 (617 dígitos)
+ [5] chave de César:         k = 1 + (s mod 25) = 1 + 2 = 3
  [6] verificação: mensagem anterior usou nenhuma (primeira mensagem) -> chave aceita
- [7] CHAVE DESTA MENSAGEM:   k = 1
+ [7] CHAVE DESTA MENSAGEM:   k = 3
  [3] enviando B ao remetente pelo servidor... aguardando o texto cifrado
- [10] texto cifrado recebido:     PMB CPC
-      decifrado com k = 1
+ [10] texto cifrado recebido:     ROD ERE
+      decifrado com k = 3
       TEXTO ORIGINAL (mensagem #1): OLA BOB
-=== MENSAGEM #2 | negociação 7e31e49e19bc6b9b | tentativa 1 | você é o DESTINATÁRIO ===
- [3] A recebido do remetente: A = 119128482109...300221105343 (617 dígitos)
- [1] valor privado NOVO:   b = 317013795537...042702468510 (617 dígitos)   (fica só neste terminal)
- [2] valor público:        B = g^b mod p = 109250844941...719635186563 (616 dígitos)
- [4] segredo compartilhado:  s = A^b mod p = 654079536416...783381715747 (616 dígitos)
- [5] chave de César:         k = 1 + (s mod 25) = 1 + 22 = 23
- [6] verificação: mensagem anterior usou k = 1 -> chave aceita
- [7] CHAVE DESTA MENSAGEM:   k = 23
+=== MENSAGEM #2 | negociação dd61e374673a4d8a | tentativa 1 | você é o DESTINATÁRIO ===
+ [3] A recebido do remetente: A = 279220226031...604578262190 (617 dígitos)
+ [1] valor privado NOVO:   b = 621177721837...623063857888 (616 dígitos)   (fica só neste terminal)
+ [2] valor público:        B = g^b mod p = 284458906654...634565227226 (617 dígitos)
+ [4] segredo compartilhado:  s = A^b mod p = 228927745566...125133992362 (617 dígitos)
+ [5] chave de César:         k = 1 + (s mod 25) = 1 + 12 = 13
+ [6] verificação: mensagem anterior usou k = 3 -> chave aceita
+ [7] CHAVE DESTA MENSAGEM:   k = 13
  [3] enviando B ao remetente pelo servidor... aguardando o texto cifrado
- [10] texto cifrado recebido:     LIX YLY
-      decifrado com k = 23
+ [10] texto cifrado recebido:     BYN OBO
+      decifrado com k = 13
       TEXTO ORIGINAL (mensagem #2): OLA BOB
-=== MENSAGEM #3 | negociação bd2691004e69012a | tentativa 1 | você é o DESTINATÁRIO ===
- [3] A recebido do remetente: A = 322212323551...614580003894 (617 dígitos)
- [1] valor privado NOVO:   b = 420456391971...168505153419 (615 dígitos)   (fica só neste terminal)
- [2] valor público:        B = g^b mod p = 184179858791...912098923081 (615 dígitos)
- [4] segredo compartilhado:  s = A^b mod p = 298622250693...229055222533 (617 dígitos)
- [5] chave de César:         k = 1 + (s mod 25) = 1 + 8 = 9
- [6] verificação: mensagem anterior usou k = 23 -> chave aceita
- [7] CHAVE DESTA MENSAGEM:   k = 9
+=== MENSAGEM #3 | negociação d4b2ba3df064458d | tentativa 1 | você é o DESTINATÁRIO ===
+ [3] A recebido do remetente: A = 168963635015...464108564450 (617 dígitos)
+ [1] valor privado NOVO:   b = 211685041858...992279735361 (617 dígitos)   (fica só neste terminal)
+ [2] valor público:        B = g^b mod p = 290092051830...881418785939 (617 dígitos)
+ [4] segredo compartilhado:  s = A^b mod p = 857186751049...717394925479 (616 dígitos)
+ [5] chave de César:         k = 1 + (s mod 25) = 1 + 4 = 5
+ [6] verificação: mensagem anterior usou k = 13 -> chave aceita
+ [7] CHAVE DESTA MENSAGEM:   k = 5
  [3] enviando B ao remetente pelo servidor... aguardando o texto cifrado
- [10] texto cifrado recebido:     JCJLJA KJBN WXACN.
-      decifrado com k = 9
+ [10] texto cifrado recebido:     FYFHFW GFXJ STWYJ.
+      decifrado com k = 5
       TEXTO ORIGINAL (mensagem #3): ATACAR BASE NORTE.
-=== MENSAGEM #4 | negociação 081ce724df01b18a | tentativa 1 | você é o DESTINATÁRIO ===
- [3] A recebido do remetente: A = 205895406618...258132581997 (617 dígitos)
- [1] valor privado NOVO:   b = 269399881296...595663551361 (617 dígitos)   (fica só neste terminal)
- [2] valor público:        B = g^b mod p = 243976366352...932609132588 (617 dígitos)
- [4] segredo compartilhado:  s = A^b mod p = 896319753111...644547077568 (616 dígitos)
- [5] chave de César:         k = 1 + (s mod 25) = 1 + 18 = 19
- [6] verificação: mensagem anterior usou k = 9 -> chave aceita
- [7] CHAVE DESTA MENSAGEM:   k = 19
+=== MENSAGEM #4 | negociação adde7ffe7c197fc6 | tentativa 1 | você é o DESTINATÁRIO ===
+ [3] A recebido do remetente: A = 300111672010...992335771508 (617 dígitos)
+ [1] valor privado NOVO:   b = 281952121477...538664341733 (617 dígitos)   (fica só neste terminal)
+ [2] valor público:        B = g^b mod p = 183241621674...574313519938 (617 dígitos)
+ [4] segredo compartilhado:  s = A^b mod p = 855884662382...580685327313 (616 dígitos)
+ [5] chave de César:         k = 1 + (s mod 25) = 1 + 13 = 14
+ [6] verificação: mensagem anterior usou k = 5 -> chave aceita
+ [7] CHAVE DESTA MENSAGEM:   k = 14
  [3] enviando B ao remetente pelo servidor... aguardando o texto cifrado
- [10] texto cifrado recebido:     TL 10A, LXF YTEMT
-      decifrado com k = 19
+ [10] texto cifrado recebido:     OG 10V, GSA TOZHO
+      decifrado com k = 14
       TEXTO ORIGINAL (mensagem #4): AS 10H, SEM FALTA
-=== MENSAGEM #5 | negociação 126d53d668eac149 | tentativa 1 | você é o DESTINATÁRIO ===
- [3] A recebido do remetente: A = 115626742491...399136943166 (617 dígitos)
- [1] valor privado NOVO:   b = 210902332684...433051988062 (616 dígitos)   (fica só neste terminal)
- [2] valor público:        B = g^b mod p = 151794585792...363438398076 (617 dígitos)
- [4] segredo compartilhado:  s = A^b mod p = 503906753985...118484883155 (616 dígitos)
- [5] chave de César:         k = 1 + (s mod 25) = 1 + 5 = 6
- [6] verificação: mensagem anterior usou k = 19 -> chave aceita
- [7] CHAVE DESTA MENSAGEM:   k = 6
- [3] enviando B ao remetente pelo servidor... aguardando o texto cifrado
- [10] texto cifrado recebido:     IUTLOXSG?
-      decifrado com k = 6
-      TEXTO ORIGINAL (mensagem #5): CONFIRMA?
-=== MENSAGEM #6 | negociação 02f7efcfad352bc2 | tentativa 1 | você é o REMETENTE ===
- [1] valor privado NOVO:   a = 194415083354...793840647197 (616 dígitos)   (fica só neste terminal)
- [2] valor público:        A = g^a mod p = 187068552199...039000677548 (617 dígitos)
- [3] enviando A ao destinatário pelo servidor...
- [3] B recebido do destinatário: B = 641646473524...408727708138 (616 dígitos)
- [4] segredo compartilhado:  s = B^a mod p = 312856940429...160635433635 (617 dígitos)
+=== MENSAGEM #5 | negociação 1f6e637065d0b104 | tentativa 1 | você é o DESTINATÁRIO ===
+ [3] A recebido do remetente: A = 313517037168...447943978382 (617 dígitos)
+ [1] valor privado NOVO:   b = 281572704961...912131264087 (616 dígitos)   (fica só neste terminal)
+ [2] valor público:        B = g^b mod p = 164315409959...908339339507 (617 dígitos)
+ [4] segredo compartilhado:  s = A^b mod p = 258858770193...975304052085 (617 dígitos)
  [5] chave de César:         k = 1 + (s mod 25) = 1 + 10 = 11
- [6] verificação: mensagem anterior usou k = 6 -> chave aceita
+ [6] verificação: mensagem anterior usou k = 14 -> chave aceita
  [7] CHAVE DESTA MENSAGEM:   k = 11
+ [3] enviando B ao remetente pelo servidor... aguardando o texto cifrado
+ [10] texto cifrado recebido:     NZYQTCXL?
+      decifrado com k = 11
+      TEXTO ORIGINAL (mensagem #5): CONFIRMA?
+=== MENSAGEM #6 | negociação 17dce55cefb8cfe8 | tentativa 1 | você é o REMETENTE ===
+ [1] valor privado NOVO:   a = 178614600099...138478688536 (617 dígitos)   (fica só neste terminal)
+ [2] valor público:        A = g^a mod p = 272892237584...368005498080 (617 dígitos)
+ [3] enviando A ao destinatário pelo servidor...
+ [3] B recebido do destinatário: B = 150647469827...786561020670 (617 dígitos)
+ [4] segredo compartilhado:  s = B^a mod p = 157888386874...040356012470 (617 dígitos)
+ [5] chave de César:         k = 1 + (s mod 25) = 1 + 20 = 21
+ [6] verificação: mensagem anterior usou k = 11 -> chave aceita
+ [7] CHAVE DESTA MENSAGEM:   k = 21
  [8] texto original:         Confirmado, Alice!
-     cifrado com César (k=11): NZYQTCXLOZ, LWTNP!   -> enviado ao servidor
+     cifrado com César (k=21): XJIADMHVYJ, VGDXZ!   -> enviado ao servidor
 *** Alguem saiu do chat ;-; ***
 *** O outro participante saiu da sala. ***
 *** Aguardando o outro participante para iniciar a conversa... ***
-Você saiu do chat.

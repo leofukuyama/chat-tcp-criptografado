@@ -35,13 +35,21 @@ python client.py          # terminal 2 (Alice) -> opção 9
 python client.py          # terminal 3 (Bob)   -> opção 9
 ```
 
+Para o vídeo, há dois scripts que rodam sozinhos:
+
+```bash
+python scripts/verificar_parametros_dh.py --pausar   # justifica a escolha de p e g (§2)
+python scripts/demonstracao_dh.py                    # as 5 mensagens consecutivas (§8)
+```
+
+O `--pausar` espera um Enter entre as partes, para dar tempo de explicar cada uma.
+
 Na opção 9 **não se digita chave**: ela é negociada a cada mensagem. Os dois clientes
 precisam escolher a opção 9. O servidor aceita **somente 2 participantes**, e uma terceira
 conexão é recusada com o aviso *"Sala cheia"*.
 
-Ao escolher a opção 9, o cliente verifica p e g, o que leva alguns segundos. Enquanto isso,
-um indicador (`| / - \`) mostra o cálculo em andamento e cada passo aparece assim que
-termina. Depois:
+Ao escolher a opção 9, o cliente mostra p e g e entra na conversa na hora (a prova de que
+p e g são adequados está no script de verificação e nos testes, §2). Depois:
 
 - **Sozinho na sala:** aparece *"Aguardando o outro participante para iniciar a conversa"*.
   Uma mensagem digitada nesse estado é **recusada** com o aviso de que não há ninguém para
@@ -93,18 +101,33 @@ modular"*:
 | 3. g^(φ/f) mod p para cada fator f | 3¹⁷⁶ = 352 ≠ 1; 3³² = 140 ≠ 1 | 11^q = p − 1 ≠ 1; 11² = 121 ≠ 1 |
 | Conclusão | 3 é raiz primitiva | 11 é raiz primitiva |
 
-Essa verificação **roda toda vez** que um cliente escolhe a opção 9 (`verificar_parametros()`),
-junto com o teste de primalidade de Miller-Rabin para p e para q, e aparece no terminal:
+### Script de verificação
+
+Como p e g são **constantes**, provar que são adequados é algo que se faz uma vez, e não a
+cada vez que o chat abre. A prova está em `scripts/verificar_parametros_dh.py` (e nos
+testes), feito para ser mostrado no vídeo. Usa só as funções do projeto (`exp_mod`,
+`eh_provavel_primo`, `eh_raiz_primitiva`) e segue o roteiro da aula:
+
+1. **Por que não p = 353 e g = 3.** Roda a força bruta da aula: o Darth acha CpB = 97 em
+   97 tentativas (frações de milissegundo) e calcula K = 160. Depois mede a velocidade da
+   máquina contra o p do chat: ~10⁶¹⁶ tentativas no pior caso, mais de 10⁶⁰⁰ anos. Mesmo os
+   algoritmos O(√N) citados na aula precisariam de ~10³⁰⁸ operações.
+2. **Por que este p.** Mostra o hexadecimal exatamente como no RFC, confere os 2048 bits e
+   roda Miller-Rabin em p e em q (primo seguro).
+3. **Por que g = 11.** Reaplica o método ao exemplo da aula (3 é e 6 não é raiz primitiva de
+   353) e depois testa g = 2, 3, …, 11 no p do chat: de 2 a 10, g^q mod p = 1; 11 é a
+   primeira raiz primitiva.
+4. **Conclusão:** "parâmetros ADEQUADOS". O script sai com código 0, ou 1 se algo falhar.
+
+Trecho da saída:
 
 ```
-Parâmetros públicos de Diffie-Hellman (fixos, iguais nos dois clientes):
-  p = primo do RFC 3526, grupo 14 (2048 bits, 617 dígitos)
-  p é primo (Miller-Rabin, 40 rodadas)
-  Passo 1: phi(p) = p - 1
-  Passo 2: phi(p) = 2 * q, com q = (p - 1)/2 primo  -> p é um primo seguro
-  Passo 3: g^(phi/2) mod p = g^q mod p = 323170060713...045361090558 (617 dígitos)  (= p - 1)  (!= 1)
-           g^(phi/q) mod p = g^2 mod p = 121  (!= 1)
-  Portanto g = 11 é raiz primitiva de p.
+      g  g^q mod p        g^2 mod p   resultado
+      2  1                        4   NÃO é (g^q mod p = 1)
+      3  1                        9   NÃO é (g^q mod p = 1)
+     ...
+     10  1                      100   NÃO é (g^q mod p = 1)
+     11  p - 1                  121   É raiz primitiva
 ```
 
 ### Valores privados
@@ -164,15 +187,15 @@ Isso se repete **inteiro** a cada mensagem, mesmo quando o texto é igual ao da 
 Trecho real do terminal do remetente (de `docs/demonstracao-dh.txt`):
 
 ```
-=== MENSAGEM #2 | negociação 7e31e49e19bc6b9b | tentativa 1 | você é o REMETENTE ===
- [1] valor privado NOVO:   a = 199699192003...113698056692 (617 dígitos)   (fica só neste terminal)
- [2] valor público:        A = g^a mod p = 119128482109...300221105343 (617 dígitos)
+=== MENSAGEM #2 | negociação dd61e374673a4d8a | tentativa 1 | você é o REMETENTE ===
+ [1] valor privado NOVO:   a = 678490198839...939389302544 (615 dígitos)   (fica só neste terminal)
+ [2] valor público:        A = g^a mod p = 279220226031...604578262190 (617 dígitos)
  [3] enviando A ao destinatário pelo servidor...
- [3] B recebido do destinatário: B = 109250844941...719635186563 (616 dígitos)
- [4] segredo compartilhado:  s = B^a mod p = 654079536416...783381715747 (616 dígitos)
- [5] chave de César:         k = 1 + (s mod 25) = 1 + 22 = 23
- [6] verificação: mensagem anterior usou k = 1 -> chave aceita
- [7] CHAVE DESTA MENSAGEM:   k = 23
+ [3] B recebido do destinatário: B = 284458906654...634565227226 (617 dígitos)
+ [4] segredo compartilhado:  s = B^a mod p = 228927745566...125133992362 (617 dígitos)
+ [5] chave de César:         k = 1 + (s mod 25) = 1 + 12 = 13
+ [6] verificação: mensagem anterior usou k = 3 -> chave aceita
+ [7] CHAVE DESTA MENSAGEM:   k = 13
 ```
 
 Os números de 617 dígitos aparecem resumidos (começo…fim e tamanho). Isso basta para
@@ -185,7 +208,7 @@ idênticos.
 
 | Regra | Como é garantida | Onde |
 |---|---|---|
-| p e g fixos e **adequados** | Primo seguro de 2048 bits (RFC 3526) e g raiz primitiva, verificados em tempo de execução | `diffie_hellman.verificar_parametros()` |
+| p e g fixos e **adequados** | Primo seguro de 2048 bits (RFC 3526) e g raiz primitiva; provado uma vez, não a cada execução | `scripts/verificar_parametros_dh.py`, testes |
 | Valores privados **renovados a cada mensagem** | `gerar_privado()` é chamado no início de **toda** negociação, inclusive nas repetições | `SessaoDH._iniciar_negociacao()`, `_receber_A()` |
 | Chave da mensagem anterior **não reutilizada diretamente** | Cada mensagem deriva k de um segredo novo; nada é guardado de uma negociação para a outra além do último k, que serve só para comparar | `sessao_dh.py` |
 | k **diferente da mensagem imediatamente anterior** | Passo 6 nos dois lados; se repetir, nova negociação com valores privados novos. Um k pode voltar depois de outras mensagens | `SessaoDH._chave_repetida()` |
@@ -290,12 +313,12 @@ fim, imprime uma tabela extraída dos terminais e **confere** os itens da entreg
 ```
 RESUMO (extraído dos três terminais)
  #  de     negociações  k Alice  k Bob  cifrado no SERVIDOR     original recuperado no destinatário
- 1  alice            1        1      1  PMB CPC                 OLA BOB
- 2  alice            1       23     23  LIX YLY                 OLA BOB
- 3  alice            1        9      9  JCJLJA KJBN WXACN.      ATACAR BASE NORTE.
- 4  alice            1       19     19  TL 10A, LXF YTEMT       AS 10H, SEM FALTA
- 5  alice            1        6      6  IUTLOXSG?               CONFIRMA?
- 6  bob              1       11     11  NZYQTCXLOZ, LWTNP!      CONFIRMADO, ALICE!
+ 1  alice            1        3      3  ROD ERE                 OLA BOB
+ 2  alice            1       13     13  BYN OBO                 OLA BOB
+ 3  alice            1        5      5  FYFHFW GFXJ STWYJ.      ATACAR BASE NORTE.
+ 4  alice            1       14     14  OG 10V, GSA TOZHO       AS 10H, SEM FALTA
+ 5  alice            1       11     11  NZYQTCXL?               CONFIRMA?
+ 6  bob              1       21     21  XJIADMHVYJ, VGDXZ!      CONFIRMADO, ALICE!
 ```
 
 | Item da entrega | Onde aparece |

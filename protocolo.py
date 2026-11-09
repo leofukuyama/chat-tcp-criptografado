@@ -17,7 +17,7 @@ A SOLUÇÃO. Cada mensagem vira um "quadro" com cabeçalho de tamanho fixo:
     M 0011 HELLO WORLD
     │  │    └── payload
     │  └── tamanho do payload, 4 dígitos decimais (máximo 9999)
-    └── tipo: M=mensagem  S=sistema  C=controle
+    └── tipo: M=mensagem  S=sistema  C=controle  D=negociação Diffie-Hellman
 
 Saber o tamanho de antemão resolve os dois casos: o receptor lê exatamente
 N bytes, nem mais nem menos, acumulando entre recv() quando preciso.
@@ -58,11 +58,18 @@ TIPO_MENSAGEM = "M"   # conteúdo de chat, cifrado -- o servidor só repassa
 TIPO_SISTEMA = "S"    # aviso gerado pelo servidor, nunca cifrado
 TIPO_CONTROLE = "C"   # comando (/sair), nunca cifrado
 
-TIPOS_VALIDOS = (TIPO_MENSAGEM, TIPO_SISTEMA, TIPO_CONTROLE)
+# Negociação Diffie-Hellman (opção 9). Carrega SOMENTE valores públicos:
+#     "A <id> <tentativa> <A>"   remetente -> destinatário
+#     "B <id> <B>"               destinatário -> remetente
+# Os valores privados, o segredo s e a chave k nunca entram em quadro
+# nenhum. O servidor trata D como trata M: imprime e repassa, sem calcular.
+TIPO_NEGOCIACAO = "D"
+
+TIPOS_VALIDOS = (TIPO_MENSAGEM, TIPO_SISTEMA, TIPO_CONTROLE, TIPO_NEGOCIACAO)
 
 # Tipos que um CLIENTE pode legitimamente enviar. O S está fora de propósito:
 # é o que impede um cliente de forjar um aviso do servidor.
-TIPOS_PERMITIDOS_DO_CLIENTE = (TIPO_MENSAGEM, TIPO_CONTROLE)
+TIPOS_PERMITIDOS_DO_CLIENTE = (TIPO_MENSAGEM, TIPO_CONTROLE, TIPO_NEGOCIACAO)
 
 
 class ErroProtocolo(ValueError):

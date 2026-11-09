@@ -58,7 +58,7 @@ corrente.
 
 | # | Requisito | Onde é atendido |
 |---|---|---|
-| R1 | Chat TCP multiusuário, cliente/servidor | `server.py`, `client.py` |
+| R1 | Chat TCP cliente/servidor (a partir do Projeto 2, sala limitada a 2 participantes) | `server.py`, `client.py` |
 | R2 | Mensagens cifradas antes de deixarem o cliente | `client.py::write()` |
 | R3 | Servidor não deve ter acesso ao conteúdo | `server.py::broadcast_raw()` |
 | R4 | Escolha da cifra e da chave pelo usuário | `client.py::escolher_cifra()` |
@@ -66,6 +66,7 @@ corrente.
 | R5+ | *(extensão além do enunciado)* Cifra de fluxo RC4 | `cifras/rc4.py`, §6.8 |
 | R5+ | *(extensão além do enunciado)* Cifra de bloco DES (chave ASCII de até 8 caracteres ou 16 dígitos hexadecimais) | `cifras/des.py`, `README-DES.md` §7 |
 | R5+ | *(extensão além do enunciado)* Cifra de bloco AES-128 (opção 8) | `cifras/aes.py`, [README-AES.md](README-AES.md) |
+| P2 | **Projeto 2:** chave de César negociada por **Diffie-Hellman a cada mensagem** (opção 9), sala de 2 participantes | `cifras/diffie_hellman.py`, `sessao_dh.py`, [README-DH.md](README-DH.md) |
 | R6 | Normalização: maiúsculas, `Á→A`, `Ç→C`, pontuação preservada | `ascii_puro.normalizar()` |
 | R7 | **Apenas ASCII (0–127) circula na rede** | `ascii_puro.py` (3 camadas) |
 | R8 | O sistema nunca cai por causa de um caractere inesperado | tratamento de erro em todas as bordas |
@@ -73,9 +74,11 @@ corrente.
 ### 1.2 Não-objetivos
 
 O trabalho é **didático**. As cifras implementadas são de interesse histórico e
-**não oferecem confidencialidade contra um adversário moderno** (ver §6.7). Não há
-negociação de chave, integridade criptográfica, autenticação de entidade nem sigilo
-persistente. Essas ausências são deliberadas e discutidas em §3 e §10, não acidentais.
+**não oferecem confidencialidade contra um adversário moderno** (ver §6.7). Nas opções 1 a
+8 não há negociação de chave; a opção 9 (Projeto 2) negocia por Diffie-Hellman, mas **sem
+autenticação** (ver [README-DH.md](README-DH.md) §9). Não há integridade criptográfica,
+autenticação de entidade nem sigilo persistente. Essas ausências são deliberadas e
+discutidas em §3 e §10, não acidentais.
 
 ---
 
@@ -929,9 +932,13 @@ python tests/test_vigenere.py
 python tests/test_rc4.py
 python tests/test_des.py
 python tests/test_integracao_ascii.py     # sobe o servidor real; leva alguns segundos
+python tests/test_diffie_hellman.py       # opção 9: Diffie-Hellman + César (README-DH.md)
+python tests/test_integracao_dh.py        # opção 9 com o servidor real
+python scripts/demonstracao_dh.py         # demonstração das 5 mensagens com os programas reais
+python scripts/verificar_parametros_dh.py # justificativa de p e g (--pausar para o vídeo)
 
 # doctests dos módulos de produção (sem saída = tudo passou)
-python -m doctest ascii_puro.py protocolo.py cifras/cesar.py cifras/monoalfabetica.py cifras/playfair.py cifras/vigenere.py cifras/rc4.py cifras/des.py
+python -m doctest ascii_puro.py protocolo.py cifras/cesar.py cifras/monoalfabetica.py cifras/playfair.py cifras/vigenere.py cifras/rc4.py cifras/des.py cifras/diffie_hellman.py
 ```
 
 > O teste de integração ocupa a porta **64146**. Encerre qualquer `server.py` em execução
@@ -949,9 +956,12 @@ python -m doctest ascii_puro.py protocolo.py cifras/cesar.py cifras/monoalfabeti
 | `test_vigenere.py` | 17/17 | ✅ |
 | `test_rc4.py` | 21/21 | ✅ |
 | `test_des.py` | 32/32 | ✅ |
+| `test_aes.py` | 70/70 | ✅ |
 | `test_integracao_ascii.py` | 13/13 | ✅ |
-| **Total** | **200/200** | ✅ |
-| Doctests (8 módulos) | — | ✅ sem falhas |
+| `test_diffie_hellman.py` | 29/29 | ✅ |
+| `test_integracao_dh.py` | 5/5 | ✅ |
+| **Total** | **304/304** | ✅ |
+| Doctests (9 módulos) | — | ✅ sem falhas |
 | Diagnósticos `diag_*` (Playfair + Vigenère) | 0/9 defeitos ainda presentes | ✅ |
 
 Os testes `diag_*` são um recurso metodológico: cada um **reproduz** um defeito da §5.3 e
@@ -1031,6 +1041,7 @@ chat-tcp-criptografado/
 │
 ├── ascii_puro.py              Ponto único de verdade sobre charset. 3 camadas de defesa.
 ├── protocolo.py               Enquadramento tipo+tamanho+payload. Desempacotador por conexão.
+├── sessao_dh.py               Opção 9: negociação Diffie-Hellman por mensagem (passos 1-10).
 │
 ├── cifras/
 │   ├── __init__.py
@@ -1041,7 +1052,8 @@ chat-tcp-criptografado/
 │   ├── playfair.py            Substituição digrâmica, matriz 5×5, fillers X/Q.
 │   ├── vigenere.py            Substituição polialfabética, preserva caixa.
 │   ├── rc4.py                 Cifra de fluxo (KSA+PRGA), transporte em Base64.
-│   └── des.py                 Cifra de bloco DES (ECB), chave ASCII ou hexadecimal, Base64.
+│   ├── des.py                 Cifra de bloco DES (ECB), chave ASCII ou hexadecimal, Base64.
+│   └── diffie_hellman.py      Opção 9: exp_mod, p (RFC 3526) e g raiz primitiva, k = 1 + (s mod 25).
 │
 ├── tests/
 │   ├── test_ascii_puro.py         30 testes — política de charset (cobre as 6 cifras)
@@ -1052,7 +1064,9 @@ chat-tcp-criptografado/
 │   ├── test_vigenere.py           17 testes + 4 diagnósticos
 │   ├── test_rc4.py                21 testes — inclui vetores canônicos da literatura e da disciplina
 │   ├── test_des.py                32 testes — vetores clássicos e o exemplo dos slides ("Atacar base norte.")
-│   └── test_integracao_ascii.py   13 testes — servidor real, sockets crus
+│   ├── test_integracao_ascii.py   13 testes — servidor real, sockets crus
+│   ├── test_diffie_hellman.py     29 testes — números da aula, p e g, sessão por mensagem
+│   └── test_integracao_dh.py       5 testes — opção 9 com o servidor real, sala de 2
 │
 ├── docs/
 │   └── superpowers/specs/
@@ -1060,12 +1074,15 @@ chat-tcp-criptografado/
 │                                                   dos defeitos e decisões de arquitetura
 │
 ├── scripts/
-│   └── verificar_wireshark.py    Confere ao vivo o que o Wireshark capturou (§8.6)
+│   ├── verificar_wireshark.py    Confere ao vivo o que o Wireshark capturou (§8.6)
+│   ├── demonstracao_dh.py        Demonstração da opção 9 (gera docs/demonstracao-dh.txt)
+│   └── verificar_parametros_dh.py Justificativa de p e g da opção 9 (roteiro da aula)
 │
 ├── README-VIGENERE-PLAYFAIR.md   Documento de apoio à apresentação: passo a passo
 │                                  didático das duas cifras
 ├── README-DES.md                 Guia de estudo do DES (Feistel, subchaves, rodadas) e o
 │                                  exemplo dos slides reproduzido no chat
+├── README-DH.md                  Projeto 2: Diffie-Hellman + César (opção 9)
 └── README.md                     Este documento
 ```
 

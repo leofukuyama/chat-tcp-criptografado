@@ -7,6 +7,7 @@ import signal
 import ascii_puro
 import protocolo
 from cifras.registro import CIFRAS, NOMES
+from sessao_dh import SessaoDH
 
 # ============================================================
 # CONEXÃO
@@ -26,6 +27,12 @@ client.connect(("127.0.0.1", 64146))
 running = True            # controla o loop principal de envio/recebimento
 saida_voluntaria = False  # diferencia "eu decidi sair" de "o servidor caiu"
 COMANDO_SAIR = "/sair"
+COMANDO_PARTICIPANTES = "/participantes"
+
+# Só existe na opção 9 (Diffie-Hellman + César). Nas outras fica None e o
+# chat funciona exatamente como antes.
+sessao = None
+aviso_dh_mostrado = False
 
 
 # ============================================================
@@ -56,6 +63,21 @@ def escolher_cifra():
 
         if opcao == "1":
             return modulo, ""  # "sem criptografia" não usa chave
+
+        if getattr(modulo, "NEGOCIA_CHAVE_POR_MENSAGEM", False):
+            # Opção 9: não há chave para digitar nem para combinar por fora.
+            # Ela é negociada pela rede, a cada mensagem, por Diffie-Hellman.
+            # p e g são constantes: a prova de que são adequados é feita uma
+            # vez, pelos testes e por scripts/verificar_parametros_dh.py, e
+            # não a cada vez que o chat abre.
+            print(
+                f"\nParâmetros públicos de Diffie-Hellman (fixos, iguais nos dois clientes):\n"
+                f"  p = primo seguro de {modulo.P.bit_length()} bits (RFC 3526, grupo 14)\n"
+                f"  g = {modulo.G} (raiz primitiva de p)\n"
+                f"  Justificativa: python scripts/verificar_parametros_dh.py"
+            )
+            print("Cada mensagem terá uma negociação NOVA e uma chave de César própria.")
+            return modulo, ""
 
         chave = input("Chave: ").strip()
         valida, erro = modulo.validar_chave(chave)
@@ -111,11 +133,43 @@ def mostrar_quadro(quadro, modulo, chave):
             print("\rServidor encerrado pelo administrador.")
             encerrar_por_desconexao()
             return False
+
+        # "/participantes N": quantas pessoas há na sala (enviado pelo
+        # servidor a cada entrada e saída). Só a opção 9 precisa disso:
+        # negociar sozinho travaria a sessão esperando um B que não vem.
+        partes = quadro.texto.split(" ")
+        if partes[0] == COMANDO_PARTICIPANTES and len(partes) == 2 and partes[1].isdigit():
+            if sessao is not None:
+                sessao.definir_participantes(int(partes[1]))
+                print(" > ", end="", flush=True)
         return True
 
     if quadro.tipo == protocolo.TIPO_SISTEMA:
         # Nunca foi cifrado: tentar decifrar isso geraria lixo.
         print(f"\r*** {quadro.texto} ***\n > ", end="", flush=True)
+        return True
+
+    # --- Opção 9: Diffie-Hellman + César ---
+    # Tanto a negociação (D) quanto o texto cifrado (M) vão para a sessão,
+    # que guarda a chave negociada para esta mensagem.
+    if sessao is not None:
+        if quadro.tipo == protocolo.TIPO_NEGOCIACAO:
+            sessao.receber_negociacao(quadro.texto)
+        else:
+            sessao.receber_mensagem(quadro.texto)
+        print(" > ", end="", flush=True)
+        return True
+
+    if quadro.tipo == protocolo.TIPO_NEGOCIACAO:
+        # Este cliente não está na opção 9, mas o outro está.
+        global aviso_dh_mostrado
+        if not aviso_dh_mostrado:
+            aviso_dh_mostrado = True
+            print(
+                "\r*** o outro participante está usando Diffie-Hellman (opção 9); "
+                "escolha a mesma opção para conversar ***\n > ",
+                end="", flush=True,
+            )
         return True
 
     # Conteúdo de chat real: só aqui decifra de fato.
@@ -255,6 +309,12 @@ def write(modulo, chave):
             print(f"   Mensagem não enviada — só é permitido ASCII. Removido: {erro}")
             continue
 
+        if sessao is not None:
+            # Opção 9: a sessão faz os passos 1 a 8 (negocia, verifica,
+            # cifra e envia). A chave só existe depois da negociação.
+            sessao.enviar_texto(texto_claro)
+            continue
+
         cifrado = modulo.cifrar(texto_claro, chave)
         print(f"   [CIFRADO]   {cifrado}")
         if hasattr(modulo, "bytes_brutos"):
@@ -295,6 +355,12 @@ def write(modulo, chave):
 # servidor (ver escolher_cifra() acima). Não há handshake antes dela.
 print("Chat em modo ASCII: acentos são convertidos, o resto não é aceito.")
 modulo, chave = escolher_cifra()
+
+if getattr(modulo, "NEGOCIA_CHAVE_POR_MENSAGEM", False):
+    sessao = SessaoDH(
+        enviar=enviar,
+        exibir=lambda linha: print(f"\r{linha}", flush=True),
+    )
 
 # receive() roda em background (daemon=True): se a thread principal
 # terminar, essa thread é derrubada automaticamente pelo interpretador.
